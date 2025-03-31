@@ -28,7 +28,16 @@ const usersCollection = collection(db, "users");
 
 async function initDoc() {
   try {
-    await setDoc(treesRef, { trees: 0 }, { merge: true });
+    const docSnapshot = await getDoc(treesRef);
+
+    if (!docSnapshot.exists()) {
+      await setDoc(treesRef, { trees: 0 });
+      console.log("Documento inicializado en 0 porque no existía antes.");
+    } else {
+      console.log(
+        "Documento ya existe. No se reinicializa el valor de 'trees'."
+      );
+    }
   } catch (error) {
     console.error("Error initializing document:", error);
   }

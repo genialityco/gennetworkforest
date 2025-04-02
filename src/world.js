@@ -91,8 +91,8 @@ function init() {
   //     createTree(x, z, height);
   //   }
 
-  winterAudio = new Audio("src/8Room-Cyberpunk-Matrix.mp3");
-  springAudio = new Audio("src/birds-frogs-nature-8257.mp3");
+  winterAudio = new Audio("/8Room-Cyberpunk-Matrix.mp3");
+  springAudio = new Audio("/birds-frogs-nature-8257.mp3");
   // Si quieres que el audio se repita en bucle, descomenta:
   winterAudio.loop = true;
   springAudio.loop = true;

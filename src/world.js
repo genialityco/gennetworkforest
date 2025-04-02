@@ -15,8 +15,8 @@ let scene,
   clouds;
 // Declare global variables for new elements
 let sun, sunlight, butterflies, birds;
-// Add global variables for tree counting
 
+// Tree counting
 let treeCount = 0;
 let MAX_TREES = 200; // Number of trees needed for 100% progress
 
@@ -24,9 +24,13 @@ const treesRef = doc(db, "globalCounters", "treesCounter");
 const configRef = doc(db, "adminConfig", "sceneConfig");
 const noise3D = createNoise3D();
 
+// Audio
 let winterAudio, springAudio;
 let isWinterAudioPlaying = false;
 let isSpringAudioPlaying = false;
+
+// Flag para saber si el usuario ha permitido reproducir audio
+let hasUserAllowedAudio = false;
 
 function init() {
   scene = new THREE.Scene();
@@ -36,10 +40,10 @@ function init() {
     60,
     window.innerWidth / window.innerHeight,
     0.1,
-    2000 // Increase far plane to see skybox
+    2000
   );
-  camera.position.set(0, 10, 40); // Move camera higher and further back
-  camera.lookAt(0, 0, 0); // Ensure camera is oriented towards the center of the scene
+  camera.position.set(0, 10, 40);
+  camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -55,51 +59,66 @@ function init() {
   directionalLight.position.set(5, 10, 5);
   scene.add(directionalLight);
 
-  // Add fog for a winter atmosphere
+  // Fog in winter
   scene.fog = new THREE.Fog(0xaaaaaa, 10, 50);
 
-  // Create sky
+  // Basic scene objects
   createSky();
-
-  // Create clouds
   createClouds();
-
-  // Create natural landscape terrain
   createTerrain();
-
-  // Create ice layer
   createIceLayer();
-
-  // Create sun and sunlight
   createSun();
-
-  // Create butterflies
   createButterflies();
-
-  // Create birds
   createBirds();
 
-  addTreePlantingButton();
+  // Buttons
+  // addTreePlantingButton();
+  addAudioStartButton(); // <- AÑADIMOS BOTÓN PARA INICIAR AUDIO
 
   listenToTreesCount();
   listenToSceneConfig();
-  // Create multiple trees distributed across the terrain
-  //   for (let i = 0; i < 20; i++) {
-  //     const x = (Math.random() - 0.5) * 40;
-  //     const z = (Math.random() - 0.5) * 40;
-  //     const height = 5 + Math.random() * 3;
-  //     createTree(x, z, height);
-  //   }
 
+  // Audios (usando rutas en /public)
   winterAudio = new Audio("/8Room-Cyberpunk-Matrix.mp3");
   springAudio = new Audio("/birds-frogs-nature-8257.mp3");
-  // Si quieres que el audio se repita en bucle, descomenta:
+  // Para bucle:
   winterAudio.loop = true;
   springAudio.loop = true;
 
   animate();
 }
 
+/**
+ * Botón para “Start Audio” (permite al usuario autorizar reproducción).
+ */
+function addAudioStartButton() {
+  const audioButton = document.createElement("button");
+  audioButton.id = "audioStartButton";
+  audioButton.textContent = "▶";
+  audioButton.style.position = "absolute";
+  audioButton.style.bottom = "20px";
+  audioButton.style.left = "20px";
+  audioButton.style.zIndex = "100";
+  audioButton.style.padding = "5px 10px";
+  document.body.appendChild(audioButton);
+
+  // Cuando hace clic, permitimos la reproducción
+  audioButton.addEventListener("click", () => {
+    hasUserAllowedAudio = true;
+    // Opcional: podrías esconder el botón si quieres
+    // audioButton.style.display = "none";
+
+    // Iniciamos de inmediato el audio de invierno (si la escena está todavía <70%)
+    // para que el usuario escuche algo en seguida
+    // (la lógica de animate() seguirá pausando/reproduciendo según el progreso).
+    winterAudio.play().catch(err => console.log(err));
+    isWinterAudioPlaying = true;
+  });
+}
+
+/**
+ * Lógica normal de Firestore
+ */
 function listenToTreesCount() {
   onSnapshot(
     treesRef,
@@ -107,10 +126,6 @@ function listenToTreesCount() {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
         document.getElementById("treesValue").innerText = data.trees;
-
-        // Podrías controlar aquí cuántos árboles “fisicamente” tienes en la escena
-        // Por ejemplo, si data.trees sube a 10 y treeCount es 5, añades 5 árboles más, etc.
-        // Por ahora, este ejemplo simplemente añade uno cada vez:
         addTree();
       } else {
         document.getElementById("treesValue").innerText = "0";
@@ -129,7 +144,7 @@ function listenToSceneConfig() {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
         if (data.maxTrees !== undefined) {
-          MAX_TREES = data.maxTrees; // Actualizamos la variable global
+          MAX_TREES = data.maxTrees;
           console.log("maxTrees actualizado desde Firestore:", MAX_TREES);
         }
       }
@@ -140,11 +155,7 @@ function listenToSceneConfig() {
   );
 }
 
-
-listenToTreesCount();
-
 function addTreePlantingButton() {
-  // Add tree planting button
   const addTreeButton = document.createElement("button");
   addTreeButton.id = "addTreeButton";
   addTreeButton.textContent = "Plant a Tree";
@@ -155,73 +166,62 @@ function addTreePlantingButton() {
   addTreeButton.style.padding = "10px 20px";
   document.body.appendChild(addTreeButton);
 
-  // Add event listener
   addTreeButton.addEventListener("click", addTree);
 }
 
-// New function to add trees
 function addTree() {
   const x = (Math.random() - 0.5) * 40;
   const z = (Math.random() - 0.5) * 40;
   const height = 5 + Math.random() * 3;
 
   createTree(x, z, height);
-
   treeCount++;
-  treeCount = Math.min(treeCount, MAX_TREES); // Cap at maximum
+  treeCount = Math.min(treeCount, MAX_TREES);
 }
-// Function to create the sun and sunlight
+
 function createSun() {
-  // Create sun
   const sunGeometry = new THREE.SphereGeometry(2, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Bright yellow
+  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
   sun = new THREE.Mesh(sunGeometry, sunMaterial);
-  sun.position.set(30, 30, -50); // Position in the sky
-  sun.visible = false; // Start invisible
+  sun.position.set(30, 30, -50);
+  sun.visible = false;
   scene.add(sun);
 
-  // Create sunlight
-  sunlight = new THREE.DirectionalLight(0xffff00, 0); // Start with zero intensity
+  sunlight = new THREE.DirectionalLight(0xffff00, 0);
   sunlight.position.copy(sun.position);
   scene.add(sunlight);
 }
 
-// Function to create butterflies
 function createButterflies() {
   butterflies = new THREE.Group();
   scene.add(butterflies);
 
-  const butterflyCount = 10; // Number of butterflies
-  const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff]; // Colorful butterflies
+  const butterflyCount = 10;
+  const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
 
-  // Load a butterfly wing texture (you'll need to provide a texture image)
   const textureLoader = new THREE.TextureLoader();
-  const butterflyTexture = textureLoader.load(
-    "path/to/butterfly_wing_texture.png"
-  ); // Replace with actual path
+  // Actualiza la ruta de tu textura real:
+  const butterflyTexture = textureLoader.load("path/to/butterfly_wing_texture.png");
 
   for (let i = 0; i < butterflyCount; i++) {
-    // Create butterfly body
     const bodyGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
-    const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 }); // Dark body
+    const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 
-    // Create butterfly wings (two sprites for left and right wings)
     const wingMaterial = new THREE.SpriteMaterial({
       map: butterflyTexture,
       color: colors[i % colors.length],
       transparent: true,
-      opacity: 0, // Start invisible
+      opacity: 0,
     });
     const leftWing = new THREE.Sprite(wingMaterial);
     leftWing.scale.set(0.5, 0.5, 1);
-    leftWing.position.set(-0.2, 0, 0); // Position left wing
+    leftWing.position.set(-0.2, 0, 0);
 
     const rightWing = new THREE.Sprite(wingMaterial);
     rightWing.scale.set(0.5, 0.5, 1);
-    rightWing.position.set(0.2, 0, 0); // Position right wing
+    rightWing.position.set(0.2, 0, 0);
 
-    // Group butterfly parts
     const butterfly = new THREE.Group();
     butterfly.add(body, leftWing, rightWing);
     butterfly.position.set(
@@ -235,69 +235,62 @@ function createButterflies() {
         (Math.random() - 0.5) * 0.05,
         (Math.random() - 0.5) * 0.1
       ),
-      flapPhase: Math.random() * Math.PI * 2, // For wing flapping animation
-      noiseOffset: Math.random() * 100, // For organic movement
+      flapPhase: Math.random() * Math.PI * 2,
+      noiseOffset: Math.random() * 100,
     };
     butterflies.add(butterfly);
   }
 }
 
-// Function to create birds
 function createBirds() {
   birds = new THREE.Group();
   scene.add(birds);
 
-  const birdCount = 5; // Number of birds
-
+  const birdCount = 5;
   for (let i = 0; i < birdCount; i++) {
-    // Create bird body (ellipsoid shape)
     const bodyGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-    bodyGeometry.scale(1, 0.5, 1.5); // Stretch into bird-like shape
+    bodyGeometry.scale(1, 0.5, 1.5);
     const bodyMaterial = new THREE.MeshPhongMaterial({
-      color: 0x555555, // Grayish bird color
+      color: 0x555555,
       transparent: true,
-      opacity: 0, // Start invisible
+      opacity: 0,
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 
-    // Create bird wings (two planes for flapping)
     const wingGeometry = new THREE.PlaneGeometry(0.6, 0.3);
     const wingMaterial = new THREE.MeshPhongMaterial({
       color: 0x444444,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0, // Start invisible
+      opacity: 0,
     });
     const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
     leftWing.position.set(-0.3, 0, 0);
-    leftWing.rotation.y = Math.PI / 2; // Orient wing
+    leftWing.rotation.y = Math.PI / 2;
 
     const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
     rightWing.position.set(0.3, 0, 0);
-    rightWing.rotation.y = -Math.PI / 2; // Orient wing
+    rightWing.rotation.y = -Math.PI / 2;
 
-    // Create bird head
     const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
     const headMaterial = new THREE.MeshPhongMaterial({
       color: 0x555555,
       transparent: true,
-      opacity: 0, // Start invisible
+      opacity: 0,
     });
     const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.set(0, 0, 0.6); // Position head at front
+    head.position.set(0, 0, 0.6);
 
-    // Create bird beak
     const beakGeometry = new THREE.ConeGeometry(0.1, 0.2, 8);
     const beakMaterial = new THREE.MeshPhongMaterial({
-      color: 0xffa500, // Orange beak
+      color: 0xffa500,
       transparent: true,
-      opacity: 0, // Start invisible
+      opacity: 0,
     });
     const beak = new THREE.Mesh(beakGeometry, beakMaterial);
-    beak.position.set(0, 0, 0.8); // Position beak on head
+    beak.position.set(0, 0, 0.8);
     beak.rotation.x = Math.PI / 2;
 
-    // Group bird parts
     const bird = new THREE.Group();
     bird.add(body, leftWing, rightWing, head, beak);
     bird.position.set(
@@ -311,19 +304,18 @@ function createBirds() {
         0,
         (Math.random() - 0.5) * 0.2
       ),
-      flapPhase: Math.random() * Math.PI * 2, // For wing flapping animation
-      noiseOffset: Math.random() * 100, // For organic movement
+      flapPhase: Math.random() * Math.PI * 2,
+      noiseOffset: Math.random() * 100,
     };
     birds.add(bird);
   }
 }
 
 function createSky() {
-  // Create a skybox
-  const skyGeometry = new THREE.SphereGeometry(500, 32, 32); // Large sphere to encompass scene
+  const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
   const skyMaterial = new THREE.MeshBasicMaterial({
-    color: 0xadd8e6, // Start with a pale winter blue
-    side: THREE.BackSide, // Render inside of sphere
+    color: 0xadd8e6,
+    side: THREE.BackSide,
   });
   sky = new THREE.Mesh(skyGeometry, skyMaterial);
   scene.add(sky);
@@ -340,10 +332,10 @@ function createClouds() {
     side: THREE.DoubleSide,
   });
 
-  const cloudCount = 10; // Number of clouds
+  const cloudCount = 10;
   for (let i = 0; i < cloudCount; i++) {
     const cloud = new THREE.Group();
-    const puffCount = 3 + Math.floor(Math.random() * 3); // 3-5 puffs per cloud
+    const puffCount = 3 + Math.floor(Math.random() * 3);
     for (let j = 0; j < puffCount; j++) {
       const puffGeometry = new THREE.SphereGeometry(
         1 + Math.random() * 0.5,
@@ -359,11 +351,11 @@ function createClouds() {
       cloud.add(puff);
     }
     cloud.position.set(
-      (Math.random() - 0.5) * 100, // Spread clouds across the sky
-      20 + Math.random() * 5, // Height above terrain
+      (Math.random() - 0.5) * 100,
+      20 + Math.random() * 5,
       (Math.random() - 0.5) * 100
     );
-    cloud.scale.set(2, 1, 2); // Flatten clouds slightly
+    cloud.scale.set(2, 1, 2);
     clouds.add(cloud);
   }
 }
@@ -380,7 +372,7 @@ function createTerrain() {
   geometry.computeVertexNormals();
 
   const material = new THREE.MeshPhongMaterial({
-    color: 0xddeeff, // Start with a snowy color for winter
+    color: 0xddeeff,
     side: THREE.DoubleSide,
     flatShading: true,
   });
@@ -396,18 +388,18 @@ function createIceLayer() {
   const segments = 100;
   const iceGeometry = new THREE.PlaneGeometry(size, size, segments, segments);
   const iceMaterial = new THREE.MeshPhongMaterial({
-    color: 0x88ccff, // Light blue for ice
+    color: 0x88ccff,
     transparent: true,
-    opacity: 0.7, // Semi-transparent
+    opacity: 0.7,
     side: THREE.DoubleSide,
     flatShading: true,
-    specular: 0xffffff, // Add some shininess for ice
+    specular: 0xffffff,
     shininess: 100,
   });
 
   ice = new THREE.Mesh(iceGeometry, iceMaterial);
   ice.rotation.x = -Math.PI / 2;
-  ice.position.y = -0.9; // Slightly above terrain
+  ice.position.y = -0.9;
   scene.add(ice);
 }
 
@@ -423,14 +415,12 @@ function createTree(x, z, height) {
 
   trees.push({ trunk, canopy, flowers, group: treeGroup });
 
-  // Animate growth
   const mixer = new THREE.AnimationMixer(treeGroup);
   const growTrack = new THREE.KeyframeTrack(
     ".scale",
     [0, 5],
     [0.1, 0.1, 0.1, 1, 1, 1]
   );
-
   const growClip = new THREE.AnimationClip("grow", 5, [growTrack]);
   const growAction = mixer.clipAction(growClip);
   growAction.play();
@@ -451,7 +441,7 @@ function createLeafCanopy(parent, trunk) {
   parent.add(canopyGroup);
 
   const canopyMaterial = new THREE.MeshPhongMaterial({
-    color: 0xddeeff, // Start with a frosty color for winter
+    color: 0xddeeff,
     flatShading: true,
   });
 
@@ -475,23 +465,20 @@ function createLeafCanopy(parent, trunk) {
 function createCherryBlossomFlower() {
   const flowerGroup = new THREE.Group();
 
-  // Petals (resembling 🌸)
   const petalMaterial = new THREE.MeshPhongMaterial({
     color: 0xffb6c1,
     side: THREE.DoubleSide,
   });
-  const petalGeometry = new THREE.CircleGeometry(0.2, 16); // Small circular petals
+  const petalGeometry = new THREE.CircleGeometry(0.2, 16);
   for (let i = 0; i < 5; i++) {
-    // 5 petals for cherry blossom
     const petal = new THREE.Mesh(petalGeometry, petalMaterial);
-    const angle = (i / 5) * Math.PI * 2; // Distribute petals in a circle
+    const angle = (i / 5) * Math.PI * 2;
     petal.position.set(Math.cos(angle) * 0.3, 0, Math.sin(angle) * 0.3);
-    petal.rotation.x = Math.PI / 2; // Lay flat
-    petal.rotation.z = angle; // Rotate to face outward
+    petal.rotation.x = Math.PI / 2;
+    petal.rotation.z = angle;
     flowerGroup.add(petal);
   }
 
-  // Center of the flower (yellow stamen)
   const centerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
   const centerMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
   const center = new THREE.Mesh(centerGeometry, centerMaterial);
@@ -504,7 +491,7 @@ function createFlowersAndFruits(parent, trunk) {
   const flowersGroup = new THREE.Group();
   parent.add(flowersGroup);
 
-  const flowerCount = 20; // Number of flowers per tree
+  const flowerCount = 20;
   for (let i = 0; i < flowerCount; i++) {
     const flower = createCherryBlossomFlower();
     flower.position.set(
@@ -516,11 +503,10 @@ function createFlowersAndFruits(parent, trunk) {
       Math.random() * Math.PI,
       Math.random() * Math.PI,
       Math.random() * Math.PI
-    ); // Random rotation for natural look
-    flower.scale.set(0, 0, 0); // Start invisible (will grow with tree)
+    );
+    flower.scale.set(0, 0, 0);
     flowersGroup.add(flower);
   }
-
   return flowersGroup;
 }
 
@@ -529,102 +515,83 @@ function animate() {
   const delta = clock.getDelta();
   mixers.forEach((mixer) => mixer.update(delta));
 
-  //   const elapsedTime = clock.getElapsedTime();
-  //   const totalDuration = 10; // Total animation duration in seconds
-  //   const progress = Math.min(elapsedTime / totalDuration, 1); // Progress from 0 to 1
-
-  const elapsedTime = clock.getElapsedTime(); // Keep for animations that still need time
-  const progress = Math.min(treeCount / MAX_TREES, 1); // Progress based on tree count
+  const elapsedTime = clock.getElapsedTime();
+  const progress = Math.min(treeCount / MAX_TREES, 1);
 
   // Simulate ice melting
   if (ice) {
-    ice.material.opacity = 0.7 * (1 - progress); // Fade out ice
-    ice.scale.set(1 - progress * 0.5, 1, 1 - progress * 0.5); // Shrink ice
+    ice.material.opacity = 0.7 * (1 - progress);
+    ice.scale.set(1 - progress * 0.5, 1, 1 - progress * 0.5);
     if (progress === 1) {
-      scene.remove(ice); // Remove ice when fully melted
+      scene.remove(ice);
       ice = null;
     }
   }
 
-  // Transition terrain color from snowy to green
+  // Terrain color
   terrain.material.color.lerpColors(
-    new THREE.Color(0xddeeff), // Snowy color
-    new THREE.Color(0x228b22), // Green color
+    new THREE.Color(0xddeeff),
+    new THREE.Color(0x228b22),
     progress
   );
 
-  // Transition sky color from pale winter blue to bright spring blue
+  // Sky color
   sky.material.color.lerpColors(
-    new THREE.Color(0xadd8e6), // Pale winter blue
-    new THREE.Color(0x87ceeb), // Bright spring blue
+    new THREE.Color(0xadd8e6),
+    new THREE.Color(0x87ceeb),
     progress
   );
 
-  // Animate clouds
+  // Clouds movement
   clouds.children.forEach((cloud) => {
-    cloud.position.x += 0.02; // Move clouds horizontally
-    if (cloud.position.x > 50) cloud.position.x = -50; // Wrap around
+    cloud.position.x += 0.02;
+    if (cloud.position.x > 50) cloud.position.x = -50;
   });
 
-  // Transition tree colors, animate growth, and add flowers
+  // Trees, canopy, flowers
   trees.forEach(({ trunk, canopy, flowers, group }) => {
-    // Transition trunk color (if desired, you can keep it constant)
     trunk.material.color.lerpColors(
-      new THREE.Color(0x8b5a2b), // Winter trunk (darker)
-      new THREE.Color(0x8b5a2b), // Normal trunk
+      new THREE.Color(0x8b5a2b),
+      new THREE.Color(0x8b5a2b),
       progress
     );
-
-    // Transition canopy color from frosty to green
     canopy.children.forEach((leaf) => {
       leaf.material.color.lerpColors(
-        new THREE.Color(0xddeeff), // Frosty color
-        new THREE.Color(0x228b22), // Green color
+        new THREE.Color(0xddeeff),
+        new THREE.Color(0x228b22),
         progress
       );
     });
 
-    // Ensure tree growth is synchronized with melting
-    //const growthProgress = Math.min(elapsedTime / totalDuration, 1);
-    const growthProgress = progress; // Use the same tree-based progress
-    const scale = 0.1 + growthProgress * 0.9; // Grow from 0.1 to 1
+    const scale = 0.1 + progress * 0.9;
     group.scale.set(scale, scale, scale);
 
-    // Animate flower growth (flowers appear as tree grows)
     flowers.children.forEach((flower) => {
-      const flowerScale = growthProgress; // Flowers grow with tree
+      const flowerScale = progress;
       flower.scale.set(flowerScale, flowerScale, flowerScale);
     });
   });
 
-  // Animation updates for spring effects (replace the existing spring effects block)
-  const springProgress = Math.max(0, (progress - 0.7) / 0.3); // Spring effects start at 70% of animation
-
-  // Spring effects (sun, sunlight, fog removal, butterflies, birds)
+  const springProgress = Math.max(0, (progress - 0.7) / 0.3);
   if (springProgress > 0) {
-    // Show sun and increase sunlight intensity
     sun.visible = true;
-    sunlight.intensity = springProgress * 0.5; // Max intensity 0.5
+    sunlight.intensity = springProgress * 0.5;
 
-    // Remove fog
     if (scene.fog) {
-      scene.fog.far = 50 + springProgress * 950; // Extend fog far plane
-      if (springProgress === 1) scene.fog = null; // Remove fog completely
+      scene.fog.far = 50 + springProgress * 950;
+      if (springProgress === 1) scene.fog = null;
     }
 
-    // Animate butterflies
+    // Butterflies
     butterflies.children.forEach((butterfly) => {
-      // Fade in butterfly
       butterfly.children.forEach((child) => {
         if (child.material) child.material.opacity = springProgress;
       });
 
-      // Organic movement using noise
       const noiseX =
         noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
       const noiseY =
-        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) *
-        0.05;
+        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) * 0.05;
       const noiseZ =
         noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
       butterfly.position.add(
@@ -633,13 +600,12 @@ function animate() {
           .add(new THREE.Vector3(noiseX, noiseY, noiseZ))
       );
 
-      // Flap wings
       const flapAngle =
         Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
-      butterfly.children[1].rotation.z = flapAngle; // Left wing
-      butterfly.children[2].rotation.z = -flapAngle; // Right wing
+      butterfly.children[1].rotation.z = flapAngle;
+      butterfly.children[2].rotation.z = -flapAngle;
 
-      // Keep butterflies within bounds
+      // Bounds
       if (butterfly.position.x > 50 || butterfly.position.x < -50)
         butterfly.userData.velocity.x *= -1;
       if (butterfly.position.z > 50 || butterfly.position.z < -50)
@@ -648,14 +614,12 @@ function animate() {
         butterfly.userData.velocity.y *= -1;
     });
 
-    // Animate birds
+    // Birds
     birds.children.forEach((bird) => {
-      // Fade in bird
       bird.children.forEach((child) => {
         if (child.material) child.material.opacity = springProgress;
       });
 
-      // Organic movement using noise
       const noiseX =
         noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
       const noiseZ =
@@ -664,17 +628,14 @@ function animate() {
         bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ))
       );
 
-      // Flap wings
       const flapAngle =
         Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
-      bird.children[1].rotation.z = flapAngle; // Left wing
-      bird.children[2].rotation.z = -flapAngle; // Right wing
+      bird.children[1].rotation.z = flapAngle;
+      bird.children[2].rotation.z = -flapAngle;
 
-      // Orient bird to face movement direction
       const velocity = bird.userData.velocity.clone().normalize();
       bird.lookAt(bird.position.clone().add(velocity));
 
-      // Keep birds within bounds
       if (bird.position.x > 100 || bird.position.x < -100)
         bird.userData.velocity.x *= -1;
       if (bird.position.z > 100 || bird.position.z < -100)
@@ -682,29 +643,30 @@ function animate() {
     });
   }
 
-  if (progress < 0.7) {
-    // Queremos audio de invierno
-    if (!isWinterAudioPlaying) {
-      // Si estaba sonando el de primavera, lo paramos
-      if (!springAudio.paused) {
-        springAudio.pause();
-        springAudio.currentTime = 0;
-        isSpringAudioPlaying = false;
+  // SOLAMENTE hacemos la lógica de reproducir/pausar audio si el usuario lo ha permitido
+  if (hasUserAllowedAudio) {
+    if (progress < 0.7) {
+      // Queremos audio de invierno
+      if (!isWinterAudioPlaying) {
+        if (!springAudio.paused) {
+          springAudio.pause();
+          springAudio.currentTime = 0;
+          isSpringAudioPlaying = false;
+        }
+        winterAudio.play().catch((err) => console.log(err));
+        isWinterAudioPlaying = true;
       }
-      // Iniciamos o resumimos el de invierno
-      winterAudio.play().catch((err) => console.log(err));
-      isWinterAudioPlaying = true;
-    }
-  } else {
-    // Queremos audio de primavera
-    if (isWinterAudioPlaying) {
-      winterAudio.pause();
-      winterAudio.currentTime = 0;
-      isWinterAudioPlaying = false;
-    }
-    if (!isSpringAudioPlaying) {
-      springAudio.play().catch((err) => console.log(err));
-      isSpringAudioPlaying = true;
+    } else {
+      // Queremos audio de primavera
+      if (isWinterAudioPlaying) {
+        winterAudio.pause();
+        winterAudio.currentTime = 0;
+        isWinterAudioPlaying = false;
+      }
+      if (!isSpringAudioPlaying) {
+        springAudio.play().catch((err) => console.log(err));
+        isSpringAudioPlaying = true;
+      }
     }
   }
 
@@ -713,7 +675,7 @@ function animate() {
 
 init();
 
-// Handle window resize
+// Resize
 window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;

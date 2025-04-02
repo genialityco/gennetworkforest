@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import {
   doc,
-  getDoc,
   setDoc,
-  updateDoc,
   onSnapshot,
+  updateDoc,
+  increment,
 } from "firebase/firestore";
 import { db } from "./firebaseConfig";
 import { Button, Container, TextInput, Title, Text } from "@mantine/core";
@@ -15,12 +15,12 @@ const configRef = doc(db, "adminConfig", "sceneConfig");
 const treesRef = doc(db, "globalCounters", "treesCounter");
 
 export default function Admin({ navigate }) {
-  const [maxTrees, setMaxTrees] = useState(200);    // Valor local
+  const [maxTrees, setMaxTrees] = useState(200);
   const [currentTrees, setCurrentTrees] = useState(0);
 
   // Cargar la config inicial y suscribirse a cambios
   useEffect(() => {
-    // Suscribirse a changes en sceneConfig
+    // Suscribirse a cambios en sceneConfig
     const unsubConfig = onSnapshot(configRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
@@ -46,7 +46,7 @@ export default function Admin({ navigate }) {
   // Guardar maxTrees en Firestore
   async function handleSaveMaxTrees() {
     try {
-      await setDoc(configRef, { maxTrees }); 
+      await setDoc(configRef, { maxTrees });
       alert("¡Configuración guardada!");
     } catch (error) {
       console.error("Error saving maxTrees:", error);
@@ -63,11 +63,23 @@ export default function Admin({ navigate }) {
     }
   }
 
+  // *** Nuevo método para agregar 1 árbol al contador ***
+  async function handleAddTree() {
+    try {
+      await updateDoc(treesRef, {
+        trees: increment(1),
+      });
+    } catch (error) {
+      console.error("Error adding tree:", error);
+    }
+  }
+
   return (
     <Container>
       <Title order={2} mb="md">
         Panel de Administración
       </Title>
+
       <Text>
         <strong>Árboles actuales:</strong> {currentTrees}
       </Text>
@@ -85,6 +97,11 @@ export default function Admin({ navigate }) {
 
       <Button color="red" mt="sm" onClick={handleResetTrees}>
         Restablecer a 0
+      </Button>
+
+      {/* Botón para añadir 1 árbol */}
+      <Button mt="sm" onClick={handleAddTree}>
+        Añadir 1 árbol
       </Button>
 
       <Button mt="xl" variant="outline" onClick={() => navigate("/")}>

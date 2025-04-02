@@ -16,10 +16,17 @@ let scene,
 // Declare global variables for new elements
 let sun, sunlight, butterflies, birds;
 // Add global variables for tree counting
+
 let treeCount = 0;
-const MAX_TREES = 20; // Number of trees needed for 100% progress
+let MAX_TREES = 200; // Number of trees needed for 100% progress
+
 const treesRef = doc(db, "globalCounters", "treesCounter");
+const configRef = doc(db, "adminConfig", "sceneConfig");
 const noise3D = createNoise3D();
+
+let winterAudio, springAudio;
+let isWinterAudioPlaying = false;
+let isSpringAudioPlaying = false;
 
 function init() {
   scene = new THREE.Scene();
@@ -74,6 +81,8 @@ function init() {
 
   addTreePlantingButton();
 
+  listenToTreesCount();
+  listenToSceneConfig();
   // Create multiple trees distributed across the terrain
   //   for (let i = 0; i < 20; i++) {
   //     const x = (Math.random() - 0.5) * 40;
@@ -81,6 +90,12 @@ function init() {
   //     const height = 5 + Math.random() * 3;
   //     createTree(x, z, height);
   //   }
+
+  winterAudio = new Audio("src/8Room-Cyberpunk-Matrix.mp3");
+  springAudio = new Audio("src/birds-frogs-nature-8257.mp3");
+  // Si quieres que el audio se repita en bucle, descomenta:
+  winterAudio.loop = true;
+  springAudio.loop = true;
 
   animate();
 }
@@ -92,9 +107,11 @@ function listenToTreesCount() {
       if (docSnapshot.exists()) {
         const data = docSnapshot.data();
         document.getElementById("treesValue").innerText = data.trees;
-        //Plant a new tree, this should be updated to really control de numer of treees
-        addTree();
 
+        // Podrías controlar aquí cuántos árboles “fisicamente” tienes en la escena
+        // Por ejemplo, si data.trees sube a 10 y treeCount es 5, añades 5 árboles más, etc.
+        // Por ahora, este ejemplo simplemente añade uno cada vez:
+        addTree();
       } else {
         document.getElementById("treesValue").innerText = "0";
       }
@@ -104,6 +121,26 @@ function listenToTreesCount() {
     }
   );
 }
+
+function listenToSceneConfig() {
+  onSnapshot(
+    configRef,
+    (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        if (data.maxTrees !== undefined) {
+          MAX_TREES = data.maxTrees; // Actualizamos la variable global
+          console.log("maxTrees actualizado desde Firestore:", MAX_TREES);
+        }
+      }
+    },
+    (error) => {
+      console.error("Error fetching scene config:", error);
+    }
+  );
+}
+
+
 listenToTreesCount();
 
 function addTreePlantingButton() {
@@ -159,7 +196,9 @@ function createButterflies() {
 
   // Load a butterfly wing texture (you'll need to provide a texture image)
   const textureLoader = new THREE.TextureLoader();
-  const butterflyTexture = textureLoader.load("path/to/butterfly_wing_texture.png"); // Replace with actual path
+  const butterflyTexture = textureLoader.load(
+    "path/to/butterfly_wing_texture.png"
+  ); // Replace with actual path
 
   for (let i = 0; i < butterflyCount; i++) {
     // Create butterfly body
@@ -185,7 +224,11 @@ function createButterflies() {
     // Group butterfly parts
     const butterfly = new THREE.Group();
     butterfly.add(body, leftWing, rightWing);
-    butterfly.position.set((Math.random() - 0.5) * 40, 5 + Math.random() * 5, (Math.random() - 0.5) * 40);
+    butterfly.position.set(
+      (Math.random() - 0.5) * 40,
+      5 + Math.random() * 5,
+      (Math.random() - 0.5) * 40
+    );
     butterfly.userData = {
       velocity: new THREE.Vector3(
         (Math.random() - 0.5) * 0.1,
@@ -257,9 +300,17 @@ function createBirds() {
     // Group bird parts
     const bird = new THREE.Group();
     bird.add(body, leftWing, rightWing, head, beak);
-    bird.position.set((Math.random() - 0.5) * 100, 15 + Math.random() * 10, (Math.random() - 0.5) * 100);
+    bird.position.set(
+      (Math.random() - 0.5) * 100,
+      15 + Math.random() * 10,
+      (Math.random() - 0.5) * 100
+    );
     bird.userData = {
-      velocity: new THREE.Vector3((Math.random() - 0.5) * 0.2, 0, (Math.random() - 0.5) * 0.2),
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.2,
+        0,
+        (Math.random() - 0.5) * 0.2
+      ),
       flapPhase: Math.random() * Math.PI * 2, // For wing flapping animation
       noiseOffset: Math.random() * 100, // For organic movement
     };
@@ -294,9 +345,17 @@ function createClouds() {
     const cloud = new THREE.Group();
     const puffCount = 3 + Math.floor(Math.random() * 3); // 3-5 puffs per cloud
     for (let j = 0; j < puffCount; j++) {
-      const puffGeometry = new THREE.SphereGeometry(1 + Math.random() * 0.5, 16, 16);
+      const puffGeometry = new THREE.SphereGeometry(
+        1 + Math.random() * 0.5,
+        16,
+        16
+      );
       const puff = new THREE.Mesh(puffGeometry, cloudMaterial);
-      puff.position.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1, (Math.random() - 0.5) * 2);
+      puff.position.set(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 1,
+        (Math.random() - 0.5) * 2
+      );
       cloud.add(puff);
     }
     cloud.position.set(
@@ -366,7 +425,11 @@ function createTree(x, z, height) {
 
   // Animate growth
   const mixer = new THREE.AnimationMixer(treeGroup);
-  const growTrack = new THREE.KeyframeTrack(".scale", [0, 5], [0.1, 0.1, 0.1, 1, 1, 1]);
+  const growTrack = new THREE.KeyframeTrack(
+    ".scale",
+    [0, 5],
+    [0.1, 0.1, 0.1, 1, 1, 1]
+  );
 
   const growClip = new THREE.AnimationClip("grow", 5, [growTrack]);
   const growAction = mixer.clipAction(growClip);
@@ -393,9 +456,17 @@ function createLeafCanopy(parent, trunk) {
   });
 
   for (let i = 0; i < 5; i++) {
-    const canopyGeometry = new THREE.SphereGeometry(2.5 - i * 0.4 + Math.random() * 0.3, 8, 8);
+    const canopyGeometry = new THREE.SphereGeometry(
+      2.5 - i * 0.4 + Math.random() * 0.3,
+      8,
+      8
+    );
     const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
-    canopy.position.set((Math.random() - 0.5) * 0.5, trunk.position.y + 2 + i * 1.5, (Math.random() - 0.5) * 0.5);
+    canopy.position.set(
+      (Math.random() - 0.5) * 0.5,
+      trunk.position.y + 2 + i * 1.5,
+      (Math.random() - 0.5) * 0.5
+    );
     canopyGroup.add(canopy);
   }
   return canopyGroup;
@@ -405,7 +476,10 @@ function createCherryBlossomFlower() {
   const flowerGroup = new THREE.Group();
 
   // Petals (resembling 🌸)
-  const petalMaterial = new THREE.MeshPhongMaterial({ color: 0xffb6c1, side: THREE.DoubleSide });
+  const petalMaterial = new THREE.MeshPhongMaterial({
+    color: 0xffb6c1,
+    side: THREE.DoubleSide,
+  });
   const petalGeometry = new THREE.CircleGeometry(0.2, 16); // Small circular petals
   for (let i = 0; i < 5; i++) {
     // 5 petals for cherry blossom
@@ -433,8 +507,16 @@ function createFlowersAndFruits(parent, trunk) {
   const flowerCount = 20; // Number of flowers per tree
   for (let i = 0; i < flowerCount; i++) {
     const flower = createCherryBlossomFlower();
-    flower.position.set((Math.random() - 0.5) * 4, trunk.position.y + 3 + Math.random() * 4, (Math.random() - 0.5) * 4);
-    flower.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI); // Random rotation for natural look
+    flower.position.set(
+      (Math.random() - 0.5) * 4,
+      trunk.position.y + 3 + Math.random() * 4,
+      (Math.random() - 0.5) * 4
+    );
+    flower.rotation.set(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI
+    ); // Random rotation for natural look
     flower.scale.set(0, 0, 0); // Start invisible (will grow with tree)
     flowersGroup.add(flower);
   }
@@ -538,20 +620,32 @@ function animate() {
       });
 
       // Organic movement using noise
-      const noiseX = noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
-      const noiseY = noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) * 0.05;
-      const noiseZ = noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
-      butterfly.position.add(butterfly.userData.velocity.clone().add(new THREE.Vector3(noiseX, noiseY, noiseZ)));
+      const noiseX =
+        noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
+      const noiseY =
+        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) *
+        0.05;
+      const noiseZ =
+        noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
+      butterfly.position.add(
+        butterfly.userData.velocity
+          .clone()
+          .add(new THREE.Vector3(noiseX, noiseY, noiseZ))
+      );
 
       // Flap wings
-      const flapAngle = Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
+      const flapAngle =
+        Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
       butterfly.children[1].rotation.z = flapAngle; // Left wing
       butterfly.children[2].rotation.z = -flapAngle; // Right wing
 
       // Keep butterflies within bounds
-      if (butterfly.position.x > 50 || butterfly.position.x < -50) butterfly.userData.velocity.x *= -1;
-      if (butterfly.position.z > 50 || butterfly.position.z < -50) butterfly.userData.velocity.z *= -1;
-      if (butterfly.position.y > 15 || butterfly.position.y < 5) butterfly.userData.velocity.y *= -1;
+      if (butterfly.position.x > 50 || butterfly.position.x < -50)
+        butterfly.userData.velocity.x *= -1;
+      if (butterfly.position.z > 50 || butterfly.position.z < -50)
+        butterfly.userData.velocity.z *= -1;
+      if (butterfly.position.y > 15 || butterfly.position.y < 5)
+        butterfly.userData.velocity.y *= -1;
     });
 
     // Animate birds
@@ -562,12 +656,17 @@ function animate() {
       });
 
       // Organic movement using noise
-      const noiseX = noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
-      const noiseZ = noise3D(0, 0, bird.userData.noiseOffset + elapsedTime * 0.05) * 0.2;
-      bird.position.add(bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ)));
+      const noiseX =
+        noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
+      const noiseZ =
+        noise3D(0, 0, bird.userData.noiseOffset + elapsedTime * 0.05) * 0.2;
+      bird.position.add(
+        bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ))
+      );
 
       // Flap wings
-      const flapAngle = Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
+      const flapAngle =
+        Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
       bird.children[1].rotation.z = flapAngle; // Left wing
       bird.children[2].rotation.z = -flapAngle; // Right wing
 
@@ -576,9 +675,37 @@ function animate() {
       bird.lookAt(bird.position.clone().add(velocity));
 
       // Keep birds within bounds
-      if (bird.position.x > 100 || bird.position.x < -100) bird.userData.velocity.x *= -1;
-      if (bird.position.z > 100 || bird.position.z < -100) bird.userData.velocity.z *= -1;
+      if (bird.position.x > 100 || bird.position.x < -100)
+        bird.userData.velocity.x *= -1;
+      if (bird.position.z > 100 || bird.position.z < -100)
+        bird.userData.velocity.z *= -1;
     });
+  }
+
+  if (progress < 0.7) {
+    // Queremos audio de invierno
+    if (!isWinterAudioPlaying) {
+      // Si estaba sonando el de primavera, lo paramos
+      if (!springAudio.paused) {
+        springAudio.pause();
+        springAudio.currentTime = 0;
+        isSpringAudioPlaying = false;
+      }
+      // Iniciamos o resumimos el de invierno
+      winterAudio.play().catch((err) => console.log(err));
+      isWinterAudioPlaying = true;
+    }
+  } else {
+    // Queremos audio de primavera
+    if (isWinterAudioPlaying) {
+      winterAudio.pause();
+      winterAudio.currentTime = 0;
+      isWinterAudioPlaying = false;
+    }
+    if (!isSpringAudioPlaying) {
+      springAudio.play().catch((err) => console.log(err));
+      isSpringAudioPlaying = true;
+    }
   }
 
   renderer.render(scene, camera);

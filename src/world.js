@@ -1,7 +1,18 @@
+// world.js (o como lo tengas llamado)
 import * as THREE from "three";
 import { createNoise3D } from "simplex-noise";
-import { doc, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  collection,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
+
+const treesCollection = collection(db, "trees");
+const treeObjects = new Map(); // key: treeId, value: { trunk, canopy, flowers, group }
 
 let scene,
   camera,
@@ -32,6 +43,249 @@ let isSpringAudioPlaying = false;
 // Flag para saber si el usuario ha permitido reproducir audio
 let hasUserAllowedAudio = false;
 
+// -----------------------------------------------------------------------------
+// Tarima frontal (hasta 10 árboles destacados)
+// -----------------------------------------------------------------------------
+const STAGE_SLOTS = 10;
+const stageSlots = new Array(STAGE_SLOTS).fill(null); // guarda treeId o null
+
+// 2 filas x 5 columnas delante de la cámara
+const stagePositions = [
+  { x: -20, z: 18 },
+  { x: -10, z: 18 },
+  { x: 0, z: 18 },
+  { x: 10, z: 18 },
+  { x: 20, z: 18 },
+  { x: -20, z: 10 },
+  { x: -10, z: 10 },
+  { x: 0, z: 10 },
+  { x: 10, z: 10 },
+  { x: 20, z: 10 },
+];
+
+// -----------------------------------------------------------------------------
+// Firestore listeners
+// -----------------------------------------------------------------------------
+
+function listenToTrees() {
+  onSnapshot(
+    treesCollection,
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const docId = change.doc.id;
+        const data = change.doc.data();
+
+        if (change.type === "added") {
+          const { x, z } = data;
+          const height = 5 + Math.random() * 3;
+          const treeObj = createTree(x, z, height);
+
+          // Guarda metadata en el grupo
+          treeObj.group.userData = {
+            treeId: docId,
+            userName: data.userName,
+            dream: data.dream,
+            growth: data.growth ?? 0,
+            state: data.state ?? "SEED",
+            originalPosition: treeObj.group.position.clone(),
+          };
+
+          // Etiquetas flotantes
+          const nameLabel = createTextLabel(data.userName, "#fffaf0");
+          nameLabel.position.set(0, height + 2.5, 0);
+
+          const dreamLabel = createTextLabel(`"${data.dream}"`, "#ffd6d6");
+          dreamLabel.position.set(0, height + 1.2, 0);
+
+          treeObj.group.add(nameLabel);
+          treeObj.group.add(dreamLabel);
+
+          treeObjects.set(docId, treeObj);
+          treeCount++;
+          treeCount = Math.min(treeCount, MAX_TREES);
+        }
+
+        if (change.type === "modified") {
+          const treeObj = treeObjects.get(docId);
+          if (treeObj) {
+            treeObj.group.userData.growth = data.growth ?? 0;
+            treeObj.group.userData.state = data.state ?? "SEED";
+          }
+        }
+
+        if (change.type === "removed") {
+          const treeObj = treeObjects.get(docId);
+          if (treeObj) {
+            scene.remove(treeObj.group);
+            treeObjects.delete(docId);
+            treeCount = Math.max(treeCount - 1, 0);
+          }
+        }
+      });
+    },
+    (error) => {
+      console.error("Error fetching trees:", error);
+    }
+  );
+}
+
+/**
+ * Solo para leer el contador global y mostrarlo en el overlay.
+ * Ya NO crea árboles. Los árboles vienen de la colección `trees`.
+ */
+function listenToTreesCount() {
+  onSnapshot(
+    treesRef,
+    (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        const el = document.getElementById("treesValue");
+        if (el) el.innerText = data.trees;
+      } else {
+        const el = document.getElementById("treesValue");
+        if (el) el.innerText = "0";
+      }
+    },
+    (error) => {
+      console.error("Error fetching trees count:", error);
+    }
+  );
+}
+
+function listenToSceneConfig() {
+  onSnapshot(
+    configRef,
+    (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        if (data.maxTrees !== undefined) {
+          MAX_TREES = data.maxTrees;
+          console.log("maxTrees actualizado desde Firestore:", MAX_TREES);
+        }
+      }
+    },
+    (error) => {
+      console.error("Error fetching scene config:", error);
+    }
+  );
+}
+
+// Árboles que han pedido ser vistos recientemente (para la tarima frontal)
+function listenToHighlightTrees() {
+  const q = query(
+    treesCollection,
+    orderBy("lastViewRequestAt", "desc"),
+    limit(10)
+  );
+
+  onSnapshot(
+    q,
+    (snapshot) => {
+      // Limpiamos asignaciones actuales de la tarima
+      for (let i = 0; i < stageSlots.length; i++) {
+        stageSlots[i] = null;
+      }
+
+      let index = 0;
+      snapshot.forEach((docSnap) => {
+        const treeId = docSnap.id;
+        if (!treeObjects.has(treeId)) return; // por si aún no está cargado
+
+        // asignar a slot y moverlo al frente
+        if (index < STAGE_SLOTS) {
+          stageSlots[index] = treeId;
+          moveTreeToStage(treeId);
+          index++;
+        }
+      });
+
+      // Opcional: mostrar label del árbol MÁS reciente
+      const firstDoc = snapshot.docs[0];
+      if (firstDoc) {
+        const metaTree = treeObjects.get(firstDoc.id);
+        if (metaTree && metaTree.group && metaTree.group.userData) {
+          showTreeLabel(metaTree.group.userData);
+        }
+      }
+    },
+    (error) => {
+      console.error("Error en highlight trees:", error);
+    }
+  );
+}
+
+function createOverlayFrame() {
+  const frameDiv = document.createElement("div");
+  
+  // Estilos para que cubra toda la pantalla
+  frameDiv.style.position = "absolute";
+  frameDiv.style.top = "0";
+  frameDiv.style.left = "0";
+  frameDiv.style.width = "100%";
+  frameDiv.style.height = "100%";
+  
+  // La imagen del marco
+  frameDiv.style.backgroundImage = 'url("/imagenes/MARCO.png")';
+  frameDiv.style.backgroundSize = "100% 100%"; // Estirar para cubrir todo
+  frameDiv.style.backgroundRepeat = "no-repeat";
+  
+  // Z-Index alto para estar encima del canvas (el canvas suele estar en 0)
+  frameDiv.style.zIndex = "10"; 
+
+  // CRÍTICO: Esto permite que los clics pasen a través de la imagen
+  // y lleguen al canvas 3D para mover la cámara.
+  frameDiv.style.pointerEvents = "none";
+
+  document.body.appendChild(frameDiv);
+}
+
+function createScoreUI() {
+  // 1. El contenedor con la imagen de fondo
+  const scoreContainer = document.createElement("div");
+  scoreContainer.style.position = "absolute";
+  // Ajusta la posición donde quieras el puntaje (ej: arriba a la izquierda)
+  scoreContainer.style.top = "10px";
+  scoreContainer.style.right = "10px";
+  // Ajusta el tamaño según tu imagen PUNTAJE.png
+  scoreContainer.style.width = "180px"; 
+  scoreContainer.style.height = "80px";
+  
+  // Imagen de fondo
+  scoreContainer.style.backgroundImage = 'url("/imagenes/PUNTAJE.png")';
+  scoreContainer.style.backgroundSize = "100% 100%"; // Ajustar imagen al contenedor
+  scoreContainer.style.backgroundRepeat = "no-repeat";
+  
+  // Flexbox para centrar el número perfectamente en la imagen
+  scoreContainer.style.display = "flex";
+  scoreContainer.style.justifyContent = "center"; // Centrado horizontal
+  scoreContainer.style.alignItems = "center";     // Centrado vertical
+  
+  scoreContainer.style.zIndex = "20"; // Encima del marco (que tiene zIndex 10)
+  scoreContainer.style.pointerEvents = "none"; // Para que no bloquee clics
+  
+  // 2. El elemento de texto que solo tendrá el número
+  const numberSpan = document.createElement("span");
+  numberSpan.id = "treesValue"; // IMPORTANTE: Este ID es el que busca tu listenToTreesCount
+  numberSpan.innerText = "0";
+  
+  // Estilos del texto (número)
+  numberSpan.style.color = "#ffffff"; // Color blanco (ajusta según tu imagen)
+  numberSpan.style.fontFamily = "system-ui, sans-serif";
+  numberSpan.style.fontSize = "32px"; // Tamaño grande
+  numberSpan.style.fontWeight = "bold";
+  numberSpan.style.textShadow = "2px 2px 4px rgba(0,0,0,0.5)"; // Sombra para legibilidad
+  
+  // Opcional: Si la imagen tiene el espacio para el texto desplazado, usa padding
+  numberSpan.style.paddingRight = "110px"; 
+
+  scoreContainer.appendChild(numberSpan);
+  document.body.appendChild(scoreContainer);
+}
+
+// -----------------------------------------------------------------------------
+// Init escena
+// -----------------------------------------------------------------------------
+
 function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xcccccc);
@@ -59,7 +313,7 @@ function init() {
   directionalLight.position.set(5, 10, 5);
   scene.add(directionalLight);
 
-  // Fog in winter
+  // Fog (aunque el mundo está en primavera, dejamos fog suave si quieres)
   scene.fog = new THREE.Fog(0xaaaaaa, 10, 50);
 
   // Basic scene objects
@@ -71,17 +325,23 @@ function init() {
   createButterflies();
   createBirds();
 
-  // Buttons
-  // addTreePlantingButton();
-  addAudioStartButton(); // <- AÑADIMOS BOTÓN PARA INICIAR AUDIO
 
-  listenToTreesCount();
-  listenToSceneConfig();
+  // Marco
+  createOverlayFrame();
+  createScoreUI();
+
+  // Botón de audio
+  addAudioStartButton();
+
+  // Listeners Firestore
+  listenToTrees(); // árboles individuales (nombre + sueño + growth)
+  listenToTreesCount(); // contador global para overlay
+  listenToSceneConfig(); // configuración (MAX_TREES, etc.)
+  listenToHighlightTrees(); // árboles destacados en pantalla
 
   // Audios (usando rutas en /public)
   winterAudio = new Audio("/8Room-Cyberpunk-Matrix.mp3");
   springAudio = new Audio("/birds-frogs-nature-8257.mp3");
-  // Para bucle:
   winterAudio.loop = true;
   springAudio.loop = true;
 
@@ -102,82 +362,17 @@ function addAudioStartButton() {
   audioButton.style.padding = "5px 10px";
   document.body.appendChild(audioButton);
 
-  // Cuando hace clic, permitimos la reproducción
   audioButton.addEventListener("click", () => {
     hasUserAllowedAudio = true;
-    // Opcional: podrías esconder el botón si quieres
-    // audioButton.style.display = "none";
-
-    // Iniciamos de inmediato el audio de invierno (si la escena está todavía <70%)
-    // para que el usuario escuche algo en seguida
-    // (la lógica de animate() seguirá pausando/reproduciendo según el progreso).
-    winterAudio.play().catch(err => console.log(err));
-    isWinterAudioPlaying = true;
+    // Mundo en primavera → reproducimos directamente el audio de primavera
+    springAudio.play().catch((err) => console.log(err));
+    isSpringAudioPlaying = true;
   });
 }
 
-/**
- * Lógica normal de Firestore
- */
-function listenToTreesCount() {
-  onSnapshot(
-    treesRef,
-    (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        document.getElementById("treesValue").innerText = data.trees;
-        addTree();
-      } else {
-        document.getElementById("treesValue").innerText = "0";
-      }
-    },
-    (error) => {
-      console.error("Error fetching trees count:", error);
-    }
-  );
-}
-
-function listenToSceneConfig() {
-  onSnapshot(
-    configRef,
-    (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        if (data.maxTrees !== undefined) {
-          MAX_TREES = data.maxTrees;
-          console.log("maxTrees actualizado desde Firestore:", MAX_TREES);
-        }
-      }
-    },
-    (error) => {
-      console.error("Error fetching scene config:", error);
-    }
-  );
-}
-
-function addTreePlantingButton() {
-  const addTreeButton = document.createElement("button");
-  addTreeButton.id = "addTreeButton";
-  addTreeButton.textContent = "Plant a Tree";
-  addTreeButton.style.position = "absolute";
-  addTreeButton.style.top = "20px";
-  addTreeButton.style.left = "20px";
-  addTreeButton.style.zIndex = "100";
-  addTreeButton.style.padding = "10px 20px";
-  document.body.appendChild(addTreeButton);
-
-  addTreeButton.addEventListener("click", addTree);
-}
-
-function addTree() {
-  const x = (Math.random() - 0.5) * 40;
-  const z = (Math.random() - 0.5) * 40;
-  const height = 5 + Math.random() * 3;
-
-  createTree(x, z, height);
-  treeCount++;
-  treeCount = Math.min(treeCount, MAX_TREES);
-}
+// -----------------------------------------------------------------------------
+// Objetos de escena
+// -----------------------------------------------------------------------------
 
 function createSun() {
   const sunGeometry = new THREE.SphereGeometry(2, 32, 32);
@@ -200,8 +395,9 @@ function createButterflies() {
   const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
 
   const textureLoader = new THREE.TextureLoader();
-  // Actualiza la ruta de tu textura real:
-  const butterflyTexture = textureLoader.load("path/to/butterfly_wing_texture.png");
+  const butterflyTexture = textureLoader.load(
+    "path/to/butterfly_wing_texture.png"
+  );
 
   for (let i = 0; i < butterflyCount; i++) {
     const bodyGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
@@ -413,7 +609,8 @@ function createTree(x, z, height) {
   const canopy = createLeafCanopy(treeGroup, trunk);
   const flowers = createFlowersAndFruits(treeGroup, trunk);
 
-  trees.push({ trunk, canopy, flowers, group: treeGroup });
+  const treeData = { trunk, canopy, flowers, group: treeGroup };
+  trees.push(treeData);
 
   const mixer = new THREE.AnimationMixer(treeGroup);
   const growTrack = new THREE.KeyframeTrack(
@@ -425,6 +622,8 @@ function createTree(x, z, height) {
   const growAction = mixer.clipAction(growClip);
   growAction.play();
   mixers.push(mixer);
+
+  return treeData;
 }
 
 function createTrunk(parent, height) {
@@ -487,6 +686,106 @@ function createCherryBlossomFlower() {
   return flowerGroup;
 }
 
+function createTextLabel(text, color = "#ffffff") {
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  const fontSize = 150; // más pequeño que 64 para que no se vean gigantes
+  const paddingX = 40;
+  const paddingY = 24;
+  const maxWidth = 30000; // por si algún sueño es larguísimo
+
+  context.font = `600 ${fontSize}px "Segoe UI", system-ui, -apple-system, sans-serif`;
+
+  // Medir texto (si quieres, aquí podrías hacer un wrap a varias líneas, pero lo dejamos simple)
+  const textWidth = Math.min(context.measureText(text).width, maxWidth);
+
+  canvas.width = textWidth + paddingX * 2;
+  canvas.height = fontSize + paddingY * 2;
+
+  // Hay que reconfigurar después de cambiar width/height
+  context.font = `600 ${fontSize}px "Segoe UI", system-ui, -apple-system, sans-serif`;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+
+  // Fondo redondeado tipo “pill”
+  const radius = 30;
+  const bgColor = "rgba(0, 0, 0, 0.65)";
+  const borderColor = "rgba(255, 255, 255, 0.35)";
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  roundRect(
+    context,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+    radius
+  );
+
+  // Relleno
+  context.fillStyle = bgColor;
+  context.fill();
+
+  // Borde suave
+  context.lineWidth = 4;
+  context.strokeStyle = borderColor;
+  context.stroke();
+
+  // Sombra del texto
+  context.shadowColor = "rgba(0, 0, 0, 0.85)";
+  context.shadowBlur = 6;
+  context.shadowOffsetX = 2;
+  context.shadowOffsetY = 3;
+
+  // Texto
+  context.fillStyle = color;
+  context.fillText(
+    text,
+    canvas.width / 2,
+    canvas.height / 2
+  );
+
+  // Texture y sprite
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false, // así siempre se ve encima de las hojas
+  });
+
+  const sprite = new THREE.Sprite(material);
+
+  // Escala en el mundo 3D (ajusta si los ves muy grandes/pequeños)
+  const pixelsPerUnit = 250; // subir = más pequeño, bajar = más grande
+  const w = canvas.width / pixelsPerUnit;
+  const h = canvas.height / pixelsPerUnit;
+  sprite.scale.set(w, h, 1);
+
+  sprite.renderOrder = 999;
+  sprite.userData.isLabel = true; // para identificar en el loop si luego quieres animarlos
+
+  return sprite;
+}
+
+
 function createFlowersAndFruits(parent, trunk) {
   const flowersGroup = new THREE.Group();
   parent.add(flowersGroup);
@@ -510,13 +809,83 @@ function createFlowersAndFruits(parent, trunk) {
   return flowersGroup;
 }
 
+// -----------------------------------------------------------------------------
+// Tarima: llevar un árbol a un slot frontal
+// -----------------------------------------------------------------------------
+
+function moveTreeToStage(treeId) {
+  const treeObj = treeObjects.get(treeId);
+  if (!treeObj) return;
+
+  // ¿Ya tiene slot asignado?
+  let slotIndex = stageSlots.indexOf(treeId);
+
+  // Si no, buscamos uno libre
+  if (slotIndex === -1) {
+    slotIndex = stageSlots.indexOf(null);
+
+    // Si no hay slots libres, reciclamos el primero
+    if (slotIndex === -1) {
+      const oldId = stageSlots[0];
+      if (oldId && treeObjects.get(oldId)) {
+        const oldTree = treeObjects.get(oldId);
+        const original = oldTree.group.userData.originalPosition;
+        if (original) {
+          oldTree.group.position.copy(original);
+        }
+      }
+      slotIndex = 0;
+    }
+
+    stageSlots[slotIndex] = treeId;
+  }
+
+  const stagePos = stagePositions[slotIndex];
+
+  // Guardar posición original si aún no la teníamos
+  if (!treeObj.group.userData.originalPosition) {
+    treeObj.group.userData.originalPosition = treeObj.group.position.clone();
+  }
+
+  treeObj.group.position.set(stagePos.x, 0, stagePos.z);
+}
+
+function showTreeLabel(meta) {
+  let label = document.getElementById("treeLabel");
+  if (!label) {
+    label = document.createElement("div");
+    label.id = "treeLabel";
+    label.style.position = "absolute";
+    label.style.bottom = "20px";
+    label.style.right = "20px";
+    label.style.maxWidth = "320px";
+    label.style.padding = "12px 16px";
+    label.style.borderRadius = "12px";
+    label.style.background = "rgba(0,0,0,0.7)";
+    label.style.color = "#fff";
+    label.style.fontFamily = "system-ui, sans-serif";
+    label.style.zIndex = "200";
+    document.body.appendChild(label);
+  }
+
+  // label.innerHTML = `
+  //   <div style="font-size:13px; opacity:.8;">Árbol de</div>
+  //   <div style="font-size:18px; font-weight:600;">${meta.userName}</div>
+  //   <div style="margin-top:8px; font-size:14px;">"${meta.dream}"</div>
+  // `;
+}
+
+// -----------------------------------------------------------------------------
+// Loop de animación
+// -----------------------------------------------------------------------------
+
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
   mixers.forEach((mixer) => mixer.update(delta));
 
   const elapsedTime = clock.getElapsedTime();
-  const progress = Math.min(treeCount / MAX_TREES, 1);
+  const progress = 1; // mundo fijo en primavera
 
   // Simulate ice melting
   if (ice) {
@@ -548,8 +917,11 @@ function animate() {
     if (cloud.position.x > 50) cloud.position.x = -50;
   });
 
-  // Trees, canopy, flowers
+  // Trees, canopy, flowers – crecimiento individual según `growth`
   trees.forEach(({ trunk, canopy, flowers, group }) => {
+    const growth = group.userData?.growth ?? 0;
+    const localProgress = Math.max(0, Math.min(growth / 100, 1));
+
     trunk.material.color.lerpColors(
       new THREE.Color(0x8b5a2b),
       new THREE.Color(0x8b5a2b),
@@ -563,12 +935,11 @@ function animate() {
       );
     });
 
-    const scale = 0.1 + progress * 0.9;
+    const scale = 0.1 + localProgress * 0.9;
     group.scale.set(scale, scale, scale);
 
     flowers.children.forEach((flower) => {
-      const flowerScale = progress;
-      flower.scale.set(flowerScale, flowerScale, flowerScale);
+      flower.scale.set(localProgress, localProgress, localProgress);
     });
   });
 
@@ -591,7 +962,8 @@ function animate() {
       const noiseX =
         noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
       const noiseY =
-        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) * 0.05;
+        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) *
+        0.05;
       const noiseZ =
         noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
       butterfly.position.add(
@@ -605,7 +977,6 @@ function animate() {
       butterfly.children[1].rotation.z = flapAngle;
       butterfly.children[2].rotation.z = -flapAngle;
 
-      // Bounds
       if (butterfly.position.x > 50 || butterfly.position.x < -50)
         butterfly.userData.velocity.x *= -1;
       if (butterfly.position.z > 50 || butterfly.position.z < -50)
@@ -643,35 +1014,38 @@ function animate() {
     });
   }
 
-  // SOLAMENTE hacemos la lógica de reproducir/pausar audio si el usuario lo ha permitido
+  // Audio primavera fija
   if (hasUserAllowedAudio) {
-    if (progress < 0.7) {
-      // Queremos audio de invierno
-      if (!isWinterAudioPlaying) {
-        if (!springAudio.paused) {
-          springAudio.pause();
-          springAudio.currentTime = 0;
-          isSpringAudioPlaying = false;
-        }
-        winterAudio.play().catch((err) => console.log(err));
-        isWinterAudioPlaying = true;
-      }
-    } else {
-      // Queremos audio de primavera
-      if (isWinterAudioPlaying) {
-        winterAudio.pause();
-        winterAudio.currentTime = 0;
-        isWinterAudioPlaying = false;
-      }
-      if (!isSpringAudioPlaying) {
+    if (!isSpringAudioPlaying) {
+      if (!springAudio.paused) {
+        // nada
+      } else {
         springAudio.play().catch((err) => console.log(err));
-        isSpringAudioPlaying = true;
       }
+      isSpringAudioPlaying = true;
+    }
+    if (isWinterAudioPlaying) {
+      winterAudio.pause();
+      winterAudio.currentTime = 0;
+      isWinterAudioPlaying = false;
     }
   }
 
+  // Las etiquetas deben mirar siempre hacia la cámara
+  treeObjects.forEach((treeObj) => {
+    treeObj.group.children.forEach((child) => {
+      if (child.isSprite) {
+        child.quaternion.copy(camera.quaternion);
+      }
+    });
+  });
+
   renderer.render(scene, camera);
 }
+
+// -----------------------------------------------------------------------------
+// Start
+// -----------------------------------------------------------------------------
 
 init();
 

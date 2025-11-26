@@ -1,228 +1,486 @@
 import React, { useEffect, useState } from "react";
 import {
-  Button,
   Container,
-  Text,
-  Title,
-  TextInput,
-  Modal,
   Card,
+  Title,
+  Text,
+  TextInput,
+  Button,
+  Stack,
   Group,
-  ScrollArea,
+  Loader,
 } from "@mantine/core";
 import {
   doc,
-  setDoc,
-  updateDoc,
-  increment,
-  onSnapshot,
-  collection,
-  addDoc,
   getDoc,
-  getDocs,
-  query,
+  setDoc,
+  addDoc,
+  collection,
+  updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
-import { db } from "./firebaseConfig";
+import { db, ensureAnonymousUser, auth } from "./firebaseConfig";
 
-const treesRef = doc(db, "globalCounters", "treesCounter");
 const usersCollection = collection(db, "users");
-
-async function initDoc() {
-  try {
-    const docSnapshot = await getDoc(treesRef);
-    if (!docSnapshot.exists()) {
-      await setDoc(treesRef, { trees: 0 });
-      console.log("Documento inicializado en 0 porque no existía antes.");
-    } else {
-      console.log("Documento ya existe. No se reinicializa el valor.");
-    }
-  } catch (error) {
-    console.error("Error initializing document:", error);
-  }
-}
-
-initDoc();
+const treesCollection = collection(db, "trees");
 
 export default function Home({ navigate }) {
-  const [trees, setTrees] = useState("Loading...");
+  const [loading, setLoading] = useState(true);
+  const [userDoc, setUserDoc] = useState(null); // { name, dream, treeId }
   const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
-  const [isUserRegistered, setIsUserRegistered] = useState(false);
-  const [showModal, setShowModal] = useState(true);
-  const [people, setPeople] = useState([]);
-  const [personName, setPersonName] = useState("");
-  const [personCompany, setPersonCompany] = useState("");
+  const [dream, setDream] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [watering, setWatering] = useState(false);
+  const [fertilizing, setFertilizing] = useState(false);
 
+  // Nueva: controla 2da y 3ra pantalla cuando ya hay usuario
+  // "intro" = pantalla de presentación, "care" = pantalla de cuidar
+  const [careScreen, setCareScreen] = useState("intro");
+
+  // 1) Arranque: sesión anónima + cargar usuario
   useEffect(() => {
-    const unsubscribe = onSnapshot(treesRef, (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        setTrees(data.trees);
-      } else {
-        setTrees(0);
+    const init = async () => {
+      try {
+        const user = await ensureAnonymousUser();
+        const userRef = doc(db, "users", user.uid);
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          setUserDoc({ id: userRef.id, ...data });
+          setName(data.name ?? "");
+          setDream(data.dream ?? "");
+        }
+      } catch (e) {
+        console.error("Error inicializando sesión:", e);
+      } finally {
+        setLoading(false);
       }
-    });
-
-    return () => unsubscribe();
+    };
+    init();
   }, []);
 
-  useEffect(() => {
-    if (isUserRegistered) {
-      fetchPeople();
-    }
-  }, [isUserRegistered]);
-
-  async function incrementTrees() {
-    try {
-      await updateDoc(treesRef, {
-        trees: increment(1),
-      });
-      console.log("Incremented successfully!");
-    } catch (error) {
-      console.error("Error incrementing trees:", error);
-    }
-  }
-
-  async function handleRegisterUser() {
-    if (name.trim() === "" || company.trim() === "") {
-      alert("Por favor, complete ambos campos.");
+  // 2) Crear usuario + árbol
+  async function handleCreateUserAndTree() {
+    if (!name.trim() || !dream.trim()) {
+      alert("Por favor escribe tu nombre y tu sueño.");
       return;
     }
+    const user = auth.currentUser;
+    if (!user) return;
 
+    setCreating(true);
     try {
-      await setDoc(doc(usersCollection, name), { name, company });
-      setIsUserRegistered(true);
-      setShowModal(false);
-    } catch (error) {
-      console.error("Error registrando usuario:", error);
-    }
-  }
+      const x = (Math.random() - 0.5) * 40;
+      const z = (Math.random() - 0.5) * 40;
 
-  async function handleAddPerson() {
-    if (personName.trim() === "" || personCompany.trim() === "") {
-      alert("Por favor, complete ambos campos.");
-      return;
-    }
-
-    try {
-      // Añadir la persona al Firestore
-      await addDoc(collection(db, `users/${name}/people`), {
-        name: personName,
-        company: personCompany,
+      const treeDoc = await addDoc(treesCollection, {
+        userId: user.uid,
+        userName: name.trim(),
+        dream: dream.trim(),
+        growth: 0,
+        state: "SEED",
+        x,
+        z,
+        createdAt: serverTimestamp(),
       });
 
-      // Incrementar el contador de árboles
-      await incrementTrees();
+      const userRef = doc(db, "users", user.uid);
+      const userData = {
+        name: name.trim(),
+        dream: dream.trim(),
+        treeId: treeDoc.id,
+        createdAt: serverTimestamp(),
+      };
+      await setDoc(userRef, userData, { merge: true });
 
-      // Limpiar los campos del formulario
-      setPersonName("");
-      setPersonCompany("");
-
-      // Recargar la lista de personas
-      fetchPeople();
-    } catch (error) {
-      console.error("Error agregando persona:", error);
+      setUserDoc({ id: userRef.id, ...userData });
+      setCareScreen("intro"); // al crear por primera vez, empieza en la pantalla de presentación
+    } catch (err) {
+      console.error("Error creando usuario/árbol:", err);
+      alert("Ocurrió un error, inténtalo de nuevo.");
+    } finally {
+      setCreating(false);
     }
   }
 
-  async function fetchPeople() {
+  // Helper para actualizar growth
+  async function updateGrowth(delta) {
+    if (!userDoc?.treeId) return;
+    const treeRef = doc(db, "trees", userDoc.treeId);
+    const snap = await getDoc(treeRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    let growth = (data.growth || 0) + delta;
+    if (growth > 100) growth = 100;
+    if (growth < 0) growth = 0;
+
+    let state = "SEED";
+    if (growth >= 30 && growth < 70) state = "SPROUT";
+    else if (growth >= 70) state = "BLOOM";
+
+    await updateDoc(treeRef, {
+      growth,
+      state,
+    });
+  }
+
+  async function handleWater() {
     try {
-      const q = query(collection(db, `users/${name}/people`));
-      const querySnapshot = await getDocs(q);
-      const fetchedPeople = querySnapshot.docs.map((doc) => doc.data());
-      setPeople(fetchedPeople);
-    } catch (error) {
-      console.error("Error obteniendo personas:", error);
+      setWatering(true);
+      await updateGrowth(10);
+    } catch (err) {
+      console.error("Error regando planta:", err);
+    } finally {
+      setWatering(false);
     }
   }
 
-  return (
-    <Container size="sm" style={{ marginTop: "2rem" }}>
-      {/* Modal de registro */}
-      <Modal
-        opened={showModal}
-        onClose={() => setShowModal(false)}
-        title="Registro de Usuario"
-        centered
-        size="100%"
-        styles={{
-          modal: {
-            width: "90%",
-            maxWidth: "400px",
-            borderRadius: "12px",
-            padding: "20px",
-          },
+  async function handleFertilize() {
+    try {
+      setFertilizing(true);
+      await updateGrowth(20);
+    } catch (err) {
+      console.error("Error abonando planta:", err);
+    } finally {
+      setFertilizing(false);
+    }
+  }
+
+  async function handleViewTree() {
+    if (!userDoc?.treeId) return;
+
+    try {
+      const treeRef = doc(db, "trees", userDoc.treeId);
+      await updateDoc(treeRef, {
+        lastViewRequestAt: serverTimestamp(),
+      });
+      alert("Tu árbol se está mostrando en el bosque 🌳✨");
+    } catch (err) {
+      console.error("Error enviando solicitud de vista:", err);
+      alert("No pudimos mostrar tu árbol, inténtalo de nuevo.");
+    }
+  }
+
+  // --- Cargando ---
+  if (loading) {
+    return (
+      <Container
+        size="lg"
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        <TextInput
-          label="Nombre"
-          placeholder="Ingresa tu nombre"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <TextInput
-          label="Empresa"
-          placeholder="Ingresa tu empresa"
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          required
-        />
-        <Button fullWidth mt="md" onClick={handleRegisterUser}>
-          Registrar
-        </Button>
-      </Modal>
+        <Group>
+          <Loader />
+          <Text>Cargando tu jardín…</Text>
+        </Group>
+      </Container>
+    );
+  }
 
-      {/* Si el usuario ya está registrado, mostramos el contenido principal */}
-      {isUserRegistered && (
-        <>
-          <Title order={2}>Bienvenido, {name}</Title>
-          <Text>Empresa: {company}</Text>
+  // --- PANTALLA 1: FORMULARIO INICIAL (sin userDoc) ---
+  if (!userDoc) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          width: "100%",
+          backgroundImage:
+            'url("/imagenes/FORMULARIO/APP_CONGRESO-DE-EDUACION_FONDO.jpg")',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "2rem 1.5rem",
+        }}
+      >
+        {/* Logo formulario */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <img
+            src="/imagenes/FORMULARIO/LOGO.png"
+            alt="Logo congreso"
+            height={150}
+            style={{ marginTop: "10%", objectFit: "contain" }}
+          />
+        </div>
 
-          <Card mt="lg" p="md">
-            <Title order={3}>Agregar Persona</Title>
-            <TextInput
-              label="Nombre de la persona"
-              placeholder="Nombre"
-              value={personName}
-              onChange={(e) => setPersonName(e.target.value)}
-              required
-            />
-            <TextInput
-              label="Empresa de la persona"
-              placeholder="Empresa"
-              value={personCompany}
-              onChange={(e) => setPersonCompany(e.target.value)}
-              required
-            />
-            <Button mt="md" onClick={handleAddPerson}>
-              Agregar Persona
-            </Button>
+        <Container size="sm" style={{ marginBottom: "2rem" }}>
+          <Card
+            shadow="xl"
+            radius="lg"
+            p="lg"
+            style={{ backgroundColor: "rgba(255,255,255,0.92)" }}
+          >
+            <Title order={2} mb="sm" ta="center">
+              Planta tu sueño 🌱
+            </Title>
+            <Text size="sm" c="dimmed" mb="md" ta="center">
+              Escribe tu nombre y el sueño que quieres plantar en este bosque.
+            </Text>
+
+            <Stack>
+              <TextInput
+                label="Tu nombre"
+                placeholder="Ej: Naty"
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+              />
+              <TextInput
+                label="Tu sueño"
+                placeholder="Ej: Tener mi propio estudio creativo"
+                value={dream}
+                onChange={(e) => setDream(e.currentTarget.value)}
+              />
+
+              <Button
+                mt="md"
+                fullWidth
+                size="lg"
+                radius="xl"
+                style={{
+                  fontWeight: 700,
+                  fontSize: "1.1rem",
+                }}
+                onClick={handleCreateUserAndTree}
+                loading={creating}
+              >
+                INSCRÍBETE
+              </Button>
+            </Stack>
+          </Card>
+        </Container>
+      </div>
+    );
+  }
+
+  // --- PANTALLA 2: PRESENTACIÓN (HOME) ---
+  if (careScreen === "intro") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          width: "100%",
+          backgroundImage:
+            'url("/imagenes/HOME/APP_CONGRESO-DE-EDUACION_HOME.jpg")',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "1.5rem",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <img
+            src="/imagenes/HOME/LOGO_CONGRESO-HOME.png"
+            alt="Logo Congreso Home"
+            style={{ maxWidth: "80%", height: "auto", objectFit: "contain" }}
+          />
+        </div>
+
+        {/* Contenido central */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "1rem",
+          }}
+        >
+          <img
+            src="/imagenes/HOME/ICONO_HOME.png"
+            alt="Icono planta"
+            style={{
+              width: 120,
+              height: 120,
+              objectFit: "contain",
+            }}
+          />
+
+          <Card
+            radius="lg"
+            p="md"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.92)",
+              maxWidth: 320,
+              textAlign: "center",
+            }}
+          >
+            <Title order={4} mb="xs">
+              ¡Hola, {userDoc.name}!
+            </Title>
+            <Text size="sm" c="dimmed">
+              Ya plantaste tu sueño. Ahora vamos a cuidarlo para que crezca.
+            </Text>
+            <Text mt="xs" size="sm" fw={500}>
+              “{userDoc.dream}”
+            </Text>
           </Card>
 
-          <Title order={3} mt="lg">
-            Personas Agregadas
-          </Title>
-          <ScrollArea style={{ height: 200 }}>
-            {people.map((person, index) => (
-              <Card key={index} shadow="sm" padding="lg" mb="sm">
-                <Group position="apart">
-                  <Text>
-                    <strong>Nombre:</strong> {person.name}
-                  </Text>
-                  <Text>
-                    <strong>Empresa:</strong> {person.company}
-                  </Text>
-                </Group>
-              </Card>
-            ))}
-          </ScrollArea>
+          <Button
+            radius="xl"
+            size="lg"
+            style={{
+              marginTop: "1rem",
+              backgroundColor: "#FACC15", // amarillo
+              color: "#000",
+              fontWeight: 700,
+              fontSize: "1rem",
+            }}
+            onClick={() => setCareScreen("care")}
+          >
+            Ir a cuidar mi planta
+          </Button>
+        </div>
 
-          <Text size="lg" mt="lg" align="center">
-            Total Árboles: {trees}
-          </Text>
-        </>
-      )}
-    </Container>
+        {/* Footer */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <img
+            src="/imagenes/HOME/TEXTO_FOOTER_HOME.png"
+            alt="Texto footer"
+            style={{ maxWidth: "90%", height: "auto", objectFit: "contain" }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // --- PANTALLA 3: CUIDAR LA PLANTA (REGAR / ABONAR / VER MI ÁRBOL) ---
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        width: "100%",
+        backgroundImage:
+          'url("/imagenes/CUIDAR/APP_CONGRESO-DE-EDUACION_FONDO.jpg")',
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      <div
+        style={{
+          height: "100%",
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "1.5rem",
+        }}
+      >
+        {/* Logo superior */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <img
+            src="/imagenes/CUIDAR/LOGO.png"
+            alt="Logo cuidar"
+            height={80}
+            style={{ objectFit: "contain" }}
+          />
+        </div>
+
+        {/* Texto + sueño */}
+        <div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "1rem",
+            }}
+          >
+            <img
+              src="/imagenes/CUIDAR/TEXTO.png"
+              alt="Tu idea ya nació, aquí la haremos crecer juntos"
+              style={{ maxWidth: "90%", height: "auto" }}
+            />
+          </div>
+
+          <Card
+            radius="lg"
+            p="md"
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.9)",
+            }}
+          >
+            <Text size="sm" c="dimmed">
+              Has plantado este sueño:
+            </Text>
+            <Text mt="xs" fw={600}>
+              “{userDoc.dream}”
+            </Text>
+          </Card>
+        </div>
+
+        {/* Acciones */}
+        <div style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>
+          <Group justify="space-around" style={{ marginBottom: "1.5rem" }}>
+            {/* Regar */}
+            <button
+              onClick={handleWater}
+              disabled={watering}
+              aria-label="Regar planta"
+              style={{
+                border: "none",
+                background: "none",
+                padding: 0,
+              }}
+            >
+              <img
+                src="/imagenes/CUIDAR/ICONO-01.png"
+                alt="Regar planta"
+                style={{
+                  width: 90,
+                  height: 90,
+                  objectFit: "contain",
+                  opacity: watering ? 0.6 : 1,
+                }}
+              />
+            </button>
+
+            {/* Abonar */}
+            <button
+              onClick={handleFertilize}
+              disabled={fertilizing}
+              aria-label="Abonar planta"
+              style={{
+                border: "none",
+                background: "none",
+                padding: 0,
+              }}
+            >
+              <img
+                src="/imagenes/CUIDAR/ICONO-02.png"
+                alt="Abonar planta"
+                style={{
+                  width: 90,
+                  height: 90,
+                  objectFit: "contain",
+                  opacity: fertilizing ? 0.6 : 1,
+                }}
+              />
+            </button>
+          </Group>
+
+          <Button
+            fullWidth
+            radius="xl"
+            variant="white"
+            style={{
+              fontWeight: 600,
+              backgroundColor: "rgba(255,255,255,0.9)",
+            }}
+            onClick={handleViewTree}
+          >
+            Ver mi árbol 🌳
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

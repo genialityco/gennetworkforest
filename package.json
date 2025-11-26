@@ -17,6 +17,8 @@
     "@mantine/hooks": "^7.17.3",
     "@tweenjs/tween.js": "^25.0.0",
     "firebase": "^11.5.0",
+    "firebase-admin": "^13.2.0",
+    "firebase-functions": "^6.3.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "simplex-noise": "^4.0.3",

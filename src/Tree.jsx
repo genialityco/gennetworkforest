@@ -10,36 +10,77 @@ import {
 /* ================= TREE ================= */
 
 function Tree({ grow }) {
+  
+  // 💡 Corrección: Las propiedades se definen aquí, fuera de useMemo,
+  // para que sean accesibles en todo el componente, incluyendo la función auxiliar.
   const {
     trunkHeight,
     trunkTopRadius,
     trunkBottomRadius,
     canopyCount,
+    showFlowers,
     showFruits,
-    canopyGrowthFactor, // Nuevo factor para el tamaño de la copa
-    fruitSize,          // Nuevo factor para el tamaño del fruto
-    canopyYOffset,      // Nuevo factor para la posición Y de la copa
+    canopyGrowthFactor,
+    flowerSize,
+    fruitSize,
+    canopyYOffset,
   } = useMemo(() => {
     console.log("Calculando propiedades del árbol para grow:", grow.grow);
-    const clamped = Math.min(100, Math.max(0, grow.grow)); // Asegura que grow esté entre 1 y 100
-    const normalizedGrow = clamped / 100; // Valor entre 0 y 1 para un escalado fácil
+    const clamped = Math.min(100, Math.max(0, grow.grow));
+    const normalizedGrow = clamped / 100;
 
     return {
-      // 🌳 TRONCO: Mayor factor de crecimiento
-      trunkHeight: 5 + normalizedGrow * 8,    // Crece hasta 9 de altura
-      trunkTopRadius: 0.5 + normalizedGrow * 0.8, // Crece hasta 1.3 de radio superior
-      trunkBottomRadius: 0.8 + normalizedGrow * 0.3, // También puede crecer ligeramente la base
+      // 🌳 TRONCO
+      trunkHeight: 5 + normalizedGrow * 8,
+      trunkTopRadius: 0.5 + normalizedGrow * 0.8,
+      trunkBottomRadius: 0.8 + normalizedGrow * 0.3,
       
       // 🍃 COPA
-      canopyCount: Math.floor(1 + normalizedGrow * 6), // Crece hasta 7 esferas de copa
-      canopyGrowthFactor: 0.9 + normalizedGrow * 2,    // La copa puede ser hasta 3 veces más grande
-      canopyYOffset: normalizedGrow * 2,             // La copa se eleva más a medida que crece el tronco
+      canopyCount: Math.floor(1 + normalizedGrow * 6),
+      canopyGrowthFactor: 0.9 + normalizedGrow * 2,
+      canopyYOffset: normalizedGrow * 2,
       
-      // 🍒 FRUTOS: Aparecen antes y crecen en tamaño
-      showFruits: clamped > 30, // Aparecen al 30% del crecimiento
-      fruitSize: 0.5 + normalizedGrow * 0.5, // Crece hasta 1.0 de radio
+      // 🌸 FLORES: Aparecen después del 50%
+      showFlowers: clamped > 50 && clamped < 80,
+      flowerSize: 0.4 + normalizedGrow * 0.3,
+      
+      // 🍒 FRUTOS: Aparecen al 80% o más
+      showFruits: clamped >= 80,
+      fruitSize: 0.5 + normalizedGrow * 0.5,
     };
   }, [grow]);
+  
+  // 💡 Función auxiliar para obtener una posición aleatoria dentro del volumen de la copa.
+  const getRandomPositionInCanopy = () => {
+    if (canopyCount === 0) {
+      return [0, trunkHeight + 3, 0];
+    }
+
+    // 1. Determinar el rango vertical y horizontal de la copa
+    const canopyTopY = trunkHeight - 1 + (canopyCount - 1) * 1.4 + canopyYOffset;
+    const canopyBottomY = trunkHeight - 1 + canopyYOffset;
+    const heightRange = canopyTopY - canopyBottomY;
+    
+    // Radio horizontal máximo (basado en la esfera de copa más baja, la más grande)
+    const maxRadius = (3.4) * canopyGrowthFactor; 
+
+    // 2. Generar coordenadas cilíndricas aleatorias
+    // Altura (Y) dentro del rango
+    const y = canopyBottomY + Math.random() * heightRange;
+    
+    // Radio (R) y Ángulo (Theta)
+    // Se usa la raíz cuadrada para concentrar más elementos cerca del centro,
+    // o simplemente Math.random() para distribución uniforme. Usaremos Math.random().
+    const r = Math.random() * maxRadius;
+    const angle = Math.random() * Math.PI * 2;
+    
+    // Convertir a coordenadas Cartesianas (X, Z)
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+
+    return [x, y, z];
+  };
+
 
   return (
     <group scale={0.1} castShadow>
@@ -65,13 +106,13 @@ function Tree({ grow }) {
         <Sphere
           key={i}
           args={[
-            (3.6 - i * 0.35) * canopyGrowthFactor, // Aplica el factor de crecimiento al radio
+            (3.6 - i * 0.35) * canopyGrowthFactor,
             8, 
             8
           ]}
           position={[
             (Math.random() - 0.5) * 0.6,
-            trunkHeight - 1 + i * 1.4 + canopyYOffset, // Ajusta la posición Y de la copa
+            trunkHeight - 1 + i * 1.4 + canopyYOffset,
             (Math.random() - 0.5) * 0.6,
           ]}
           castShadow
@@ -83,29 +124,76 @@ function Tree({ grow }) {
         </Sphere>
       ))}
 
-      {/* 🍒 Frutos */}
-      {showFruits &&
-        Array.from({ length: 5 }).map((_, i) => (
-          <Sphere
-            key={i}
-            args={[fruitSize, 16, 16]} // Aplica el factor de tamaño del fruto
+      {/* 🌸 Flores - MODIFICADO para distribución aleatoria */}
+      {showFlowers && Array.from({ length: 25 }).map((_, i) => { // Aumentado a 25 flores
+        const [xPos, yPos, zPos] = getRandomPositionInCanopy();
+        
+        return (
+          <group 
+            key={`flower-${i}`}
             position={[
-              Math.cos(i * 1.5) * 7 * canopyGrowthFactor * 0.5, // Distribución más amplia en una copa grande
-              trunkHeight + 1.5 + canopyYOffset, // Se posiciona más arriba con el crecimiento
-              Math.sin(i * 1.5) * 7 * canopyGrowthFactor * 0.5,
+              xPos,
+              yPos,
+              zPos,
             ]}
-            castShadow
           >
-            <meshStandardMaterial color="#d40000" />
-          </Sphere>
-        ))}
+            {/* Centro de la flor (amarillo) */}
+            <Sphere 
+              args={[flowerSize * 0.5, 8, 8]} 
+              position={[0, 0, 0]}
+              castShadow
+            >
+              <meshStandardMaterial color="#ffd700" />
+            </Sphere>
+            
+            {/* Pétalos (rosados) */}
+            {Array.from({ length: Math.floor(grow.grow/10)*2 || 4 }).map((_, p) => (
+              <Sphere
+                key={p}
+                args={[flowerSize * 0.6, 8, 8]}
+                position={[
+                  Math.cos(p * 1.26) * flowerSize * 1.2,
+                  Math.sin(p * 1.26) * flowerSize * 1.2,
+                  0,
+                ]}
+                castShadow
+              >
+                <meshStandardMaterial color="#ff69b4" />
+              </Sphere>
+            ))}
+          </group>
+        );
+      })}
+
+
+      {/* 🍒 Frutos - MODIFICADO para distribución aleatoria */}
+      {showFruits &&
+        Array.from({ length: Math.floor(grow.grow / 3) }).map((_, i) => { // Aumentada la cantidad de frutos
+          const [xPos, yPos, zPos] = getRandomPositionInCanopy();
+          
+          return (
+            <Sphere
+              key={i}
+              args={[fruitSize, 16, 16]}
+              position={[
+                xPos,
+                yPos,
+                zPos,
+              ]}
+              castShadow
+            >
+              <meshStandardMaterial color="#d40000" />
+            </Sphere>
+          );
+        })}
     </group>
   );
 }
 
-/* ================= ENVIRONMENT ================= */
+// ------------------------------------------------------------------
 
-// ... (El resto del código de Ground, Sky, Sun, y UserTree3D permanece igual)
+
+/* ================= ENVIRONMENT ================= */
 
 function Ground() {
   return (
@@ -160,6 +248,9 @@ function Sun() {
   );
 }
 
+// ------------------------------------------------------------------
+
+
 /* ================= SCENE ================= */
 
 export function UserTree3D(treeGrow) {
@@ -176,7 +267,7 @@ export function UserTree3D(treeGrow) {
 
       <ambientLight intensity={0.35} />
 
-      <Tree grow={treeGrow} /> {/* grow=80 para mostrar el árbol crecido */}
+      <Tree grow={treeGrow} />
       <Ground />
 
       <OrbitControls
@@ -189,4 +280,5 @@ export function UserTree3D(treeGrow) {
     </Canvas>
   );
 }
+
 export default UserTree3D;

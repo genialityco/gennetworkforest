@@ -1,5 +1,6 @@
 // world.js (o como lo tengas llamado)
 import * as THREE from "three";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { createNoise3D } from "simplex-noise";
 import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
@@ -452,7 +453,6 @@ function init() {
   springAudio = new Audio("/birds-frogs-nature-8257.mp3");
   winterAudio.loop = true;
   springAudio.loop = true;
-
   animate();
 }
 
@@ -610,13 +610,12 @@ function createBirds() {
 }
 
 function createSky() {
-  const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-  const skyMaterial = new THREE.MeshBasicMaterial({
-    color: 0xadd8e6,
-    side: THREE.BackSide,
+  // Load HDR environment map (only once)
+  new RGBELoader().load("/src/hdr/partly_cloudy_puresky.hdr", (hdr) => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = hdr;
+    scene.background = hdr;
   });
-  sky = new THREE.Mesh(skyGeometry, skyMaterial);
-  scene.add(sky);
 }
 
 function createClouds() {
@@ -1056,9 +1055,6 @@ function animate() {
 
   // Terrain color
   terrain.material.color.lerpColors(new THREE.Color(0xddeeff), new THREE.Color(0x228b22), progress);
-
-  // Sky color
-  sky.material.color.lerpColors(new THREE.Color(0xadd8e6), new THREE.Color(0x87ceeb), progress);
 
   // Clouds movement
   clouds.children.forEach((cloud) => {

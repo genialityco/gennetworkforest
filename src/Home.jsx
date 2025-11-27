@@ -179,28 +179,19 @@ export default function Home({ navigate }) {
     }
   }
 
-  async function handleViewTree() {
+
+    async function handleViewTree() {
     if (!userDoc?.treeId) return;
-  
+
     try {
       const treeRef = doc(db, "trees", userDoc.treeId);
-      const snap = await getDoc(treeRef);
-  
-      if (!snap.exists()) {
-        alert("No se encontró tu árbol");
-        return;
-      }
-  
-      const data = snap.data();
-      setTreeGrowth(data.growth || 0);
-      setShowTree3D(true);
-  
       await updateDoc(treeRef, {
         lastViewRequestAt: serverTimestamp(),
       });
+      alert("Tu árbol se está mostrando en el bosque 🌳✨");
     } catch (err) {
-      console.error("Error mostrando árbol:", err);
-      alert("No pudimos mostrar tu árbol");
+      console.error("Error enviando solicitud de vista:", err);
+      alert("No pudimos mostrar tu árbol, inténtalo de nuevo.");
     }
   }
 

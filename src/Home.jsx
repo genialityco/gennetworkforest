@@ -9,6 +9,7 @@ import {
   Stack,
   Group,
   Loader,
+  Modal
 } from "@mantine/core";
 import {
   doc,
@@ -21,6 +22,9 @@ import {
 } from "firebase/firestore";
 import { db, ensureAnonymousUser, auth } from "./firebaseConfig";
 import { signOut } from "firebase/auth";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Environment } from "@react-three/drei";
+import { UserTree3D } from "./Tree";
 
 const usersCollection = collection(db, "users");
 const treesCollection = collection(db, "trees");
@@ -59,6 +63,8 @@ export default function Home({ navigate }) {
   const [creating, setCreating] = useState(false);
   const [watering, setWatering] = useState(false);
   const [fertilizing, setFertilizing] = useState(false);
+  const [showTree3D, setShowTree3D] = useState(false);
+  const [treeGrowth, setTreeGrowth] = useState(0);
 
   // Nueva: controla 2da y 3ra pantalla cuando ya hay usuario
   // "intro" = pantalla de presentación, "care" = pantalla de cuidar
@@ -175,16 +181,26 @@ export default function Home({ navigate }) {
 
   async function handleViewTree() {
     if (!userDoc?.treeId) return;
-
+  
     try {
       const treeRef = doc(db, "trees", userDoc.treeId);
+      const snap = await getDoc(treeRef);
+  
+      if (!snap.exists()) {
+        alert("No se encontró tu árbol");
+        return;
+      }
+  
+      const data = snap.data();
+      setTreeGrowth(data.growth || 0);
+      setShowTree3D(true);
+  
       await updateDoc(treeRef, {
         lastViewRequestAt: serverTimestamp(),
       });
-      alert("Tu árbol se está mostrando en el bosque 🌳✨");
     } catch (err) {
-      console.error("Error enviando solicitud de vista:", err);
-      alert("No pudimos mostrar tu árbol, inténtalo de nuevo.");
+      console.error("Error mostrando árbol:", err);
+      alert("No pudimos mostrar tu árbol");
     }
   }
 
@@ -213,7 +229,7 @@ export default function Home({ navigate }) {
       style={{
         position: "absolute",
         top: "20px",
-        right: "20px",
+        left: "20px",
         zIndex: 1000,
         backgroundColor: "rgba(255, 255, 255, 0.8)", // Fondo semitransparente para que se vea
         backdropFilter: "blur(4px)",
@@ -546,6 +562,47 @@ export default function Home({ navigate }) {
           </Button>
         </div>
       </div>
+      <Modal
+  opened={showTree3D}
+  onClose={() => setShowTree3D(false)}
+  fullScreen
+  padding={0}
+  withCloseButton
+  styles={{
+    body: { height: "100vh", background: "#000" },
+  }}
+>
+  
+    
+    <UserTree3D grow={treeGrowth} />
+
+   
+
+  {/* Overlay UI */}
+  <div
+    style={{
+      position: "absolute",
+      bottom: 20,
+      width: "100%",
+      display: "flex",
+      justifyContent: "center",
+      pointerEvents: "none",
+    }}
+  >
+    <Card
+      radius="xl"
+      p="sm"
+      style={{
+        backgroundColor: "rgba(255,255,255,0.9)",
+        pointerEvents: "auto",
+      }}
+    >
+      <Text fw={600} ta="center">
+        Crecimiento: {treeGrowth}%
+      </Text>
+    </Card>
+  </div>
+</Modal>
     </div>
   );
 }

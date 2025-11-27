@@ -1378,60 +1378,7 @@ function animate() {
       if (bird.position.x > 100 || bird.position.x < -100) bird.userData.velocity.x *= -1;
       if (bird.position.z > 100 || bird.position.z < -100) bird.userData.velocity.z *= -1;
     });
-    frogs?.children.forEach((frog) => {
-      // Fade-in suave en primavera
-      frog.material.opacity = Math.min(
-        1,
-        frog.material.opacity + delta * 0.5
-      );
     
-      frog.userData.hopTimer += delta;
-    
-      // Cuando toca saltar
-      if (frog.userData.hopTimer > frog.userData.hopInterval) {
-        frog.userData.hopTimer = 0;
-    
-        // Movimiento horizontal
-        frog.position.x += frog.userData.velocity.x;
-        frog.position.z += frog.userData.velocity.z;
-    
-        // Rebote pequeño
-        frog.userData.jumpPhase = 0;
-      }
-    
-      // Animación de salto (parábola simple)
-      if (frog.userData.jumpPhase !== undefined) {
-        frog.userData.jumpPhase += delta * 6;
-        const jumpHeight = Math.sin(frog.userData.jumpPhase) * 0.6;
-        frog.position.y = frog.userData.baseY + Math.max(0, jumpHeight);
-    
-        if (frog.userData.jumpPhase >= Math.PI) {
-          frog.position.y = frog.userData.baseY;
-          frog.userData.jumpPhase = undefined;
-        }
-      }
-    
-      // Ruido suave para que no se muevan igual
-      const noiseX =
-        noise3D(frog.userData.noiseOffset, clock.elapsedTime * 0.2, 0) * 0.02;
-      const noiseZ =
-        noise3D(0, frog.userData.noiseOffset, clock.elapsedTime * 0.2) * 0.02;
-    
-      frog.position.x += noiseX;
-      frog.position.z += noiseZ;
-    
-      // Mirar hacia donde "salta"
-      frog.rotation.y = Math.atan2(
-        frog.userData.velocity.x,
-        frog.userData.velocity.z
-      );
-    
-      // Límites del terreno
-      if (frog.position.x > 48 || frog.position.x < -48)
-        frog.userData.velocity.x *= -1;
-      if (frog.position.z > 48 || frog.position.z < -48)
-        frog.userData.velocity.z *= -1;
-    });
     frogs?.children.forEach((frog) => {
       // Fade-in suave en primavera
       frog.material.opacity = Math.min(

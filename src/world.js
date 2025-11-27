@@ -46,21 +46,25 @@ let hasUserAllowedAudio = false;
 // -----------------------------------------------------------------------------
 // Tarima frontal (hasta 10 árboles destacados)
 // -----------------------------------------------------------------------------
+// 1 fila con 10 árboles destacados
 const STAGE_SLOTS = 10;
-const stageSlots = new Array(STAGE_SLOTS).fill(null); // guarda treeId o null
+const stageSlots = new Array(STAGE_SLOTS).fill(null);
 
-// 2 filas x 5 columnas delante de la cámara
+let stageInfoCards = new Array(STAGE_SLOTS).fill(null); // cards HTML por slot
+
+// Todos con el mismo z (más o menos al frente de la cámara)
+// y x repartidos simétricamente
 const stagePositions = [
-  { x: -20, z: 18 },
-  { x: -10, z: 18 },
-  { x: 0, z: 18 },
-  { x: 10, z: 18 },
-  { x: 20, z: 18 },
-  { x: -20, z: 10 },
-  { x: -10, z: 10 },
-  { x: 0, z: 10 },
-  { x: 10, z: 10 },
-  { x: 20, z: 10 },
+  { x: -22, z: 20 },
+  { x: -21, z: 14 },
+  { x: -12, z: 20 },
+  { x: -9, z: 14 },
+  { x: -3, z: 20 },
+  { x: 3, z: 20 },
+  { x: 9, z: 14 },
+  { x: 12, z: 20 },
+  { x: 21, z: 14 },
+  { x: 22, z: 20 },
 ];
 
 // -----------------------------------------------------------------------------
@@ -80,7 +84,6 @@ function listenToTrees() {
           const height = 5 + Math.random() * 3;
           const treeObj = createTree(x, z, height);
 
-          // Guarda metadata en el grupo
           treeObj.group.userData = {
             treeId: docId,
             userName: data.userName,
@@ -90,17 +93,17 @@ function listenToTrees() {
             originalPosition: treeObj.group.position.clone(),
           };
 
-          // Etiquetas flotantes
           const nameLabel = createTextLabel(data.userName, "#fffaf0");
-          nameLabel.position.set(0, height + 2.5, 0);
+          nameLabel.position.set(0, height + 7.5, 0);
 
-          const dreamLabel = createTextLabel(`"${data.dream}"`, "#ffd6d6");
-          dreamLabel.position.set(0, height + 1.2, 0);
+          const dreamLabel = createTextLabel(`"${data.dream}"`, "#ffd6e9");
+          dreamLabel.position.set(0, height + 6.2, 0);
 
           treeObj.group.add(nameLabel);
           treeObj.group.add(dreamLabel);
 
           treeObjects.set(docId, treeObj);
+
           treeCount++;
           treeCount = Math.min(treeCount, MAX_TREES);
         }
@@ -122,6 +125,9 @@ function listenToTrees() {
           }
         }
       });
+
+      // 🔹 Actualizar el contador visible según los árboles que realmente están en escena
+      updateTreesCounterUI();
     },
     (error) => {
       console.error("Error fetching trees:", error);
@@ -129,28 +135,29 @@ function listenToTrees() {
   );
 }
 
+
 /**
  * Solo para leer el contador global y mostrarlo en el overlay.
  * Ya NO crea árboles. Los árboles vienen de la colección `trees`.
  */
-function listenToTreesCount() {
-  onSnapshot(
-    treesRef,
-    (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        const el = document.getElementById("treesValue");
-        if (el) el.innerText = data.trees;
-      } else {
-        const el = document.getElementById("treesValue");
-        if (el) el.innerText = "0";
-      }
-    },
-    (error) => {
-      console.error("Error fetching trees count:", error);
-    }
-  );
-}
+// function listenToTreesCount() {
+//   onSnapshot(
+//     treesRef,
+//     (docSnapshot) => {
+//       if (docSnapshot.exists()) {
+//         const data = docSnapshot.data();
+//         const el = document.getElementById("treesValue");
+//         if (el) el.innerText = data.trees;
+//       } else {
+//         const el = document.getElementById("treesValue");
+//         if (el) el.innerText = "0";
+//       }
+//     },
+//     (error) => {
+//       console.error("Error fetching trees count:", error);
+//     }
+//   );
+// }
 
 function listenToSceneConfig() {
   onSnapshot(
@@ -181,32 +188,60 @@ function listenToHighlightTrees() {
   onSnapshot(
     q,
     (snapshot) => {
-      // Limpiamos asignaciones actuales de la tarima
+      // 1) Conjunto de árboles que DEBEN estar destacados ahora
+      const newHighlightedIds = new Set();
+      snapshot.forEach((docSnap) => {
+        newHighlightedIds.add(docSnap.id);
+      });
+
+      // 2) Restaurar árboles que estaban en la tarima y ya NO están en el top 10
+      for (let i = 0; i < stageSlots.length; i++) {
+        const oldId = stageSlots[i];
+        if (!oldId) continue;
+
+        if (!newHighlightedIds.has(oldId)) {
+          const oldTree = treeObjects.get(oldId);
+          if (oldTree) {
+            const original = oldTree.group.userData.originalPosition;
+            if (original) {
+              oldTree.group.position.copy(original);
+            }
+
+            // volver a mostrar sus labels 3D
+            oldTree.group.children.forEach((child) => {
+              if (child.isSprite && child.userData.isLabel) {
+                child.visible = true;
+              }
+            });
+
+            // quitar halo si existe
+            const halo = oldTree.group.getObjectByName("stageHalo");
+            if (halo) {
+              oldTree.group.remove(halo);
+            }
+          }
+
+          stageSlots[i] = null;
+        }
+      }
+
+      // 3) Limpiamos asignaciones actuales de la tarima
       for (let i = 0; i < stageSlots.length; i++) {
         stageSlots[i] = null;
       }
 
+      // 4) Asignamos los nuevos destacados a slots y los movemos al frente
       let index = 0;
       snapshot.forEach((docSnap) => {
         const treeId = docSnap.id;
         if (!treeObjects.has(treeId)) return; // por si aún no está cargado
 
-        // asignar a slot y moverlo al frente
         if (index < STAGE_SLOTS) {
           stageSlots[index] = treeId;
           moveTreeToStage(treeId);
           index++;
         }
       });
-
-      // Opcional: mostrar label del árbol MÁS reciente
-      const firstDoc = snapshot.docs[0];
-      if (firstDoc) {
-        const metaTree = treeObjects.get(firstDoc.id);
-        if (metaTree && metaTree.group && metaTree.group.userData) {
-          showTreeLabel(metaTree.group.userData);
-        }
-      }
     },
     (error) => {
       console.error("Error en highlight trees:", error);
@@ -214,23 +249,24 @@ function listenToHighlightTrees() {
   );
 }
 
+
 function createOverlayFrame() {
   const frameDiv = document.createElement("div");
-  
+
   // Estilos para que cubra toda la pantalla
   frameDiv.style.position = "absolute";
   frameDiv.style.top = "0";
   frameDiv.style.left = "0";
   frameDiv.style.width = "100%";
   frameDiv.style.height = "100%";
-  
+
   // La imagen del marco
   frameDiv.style.backgroundImage = 'url("/imagenes/MARCO.png")';
   frameDiv.style.backgroundSize = "100% 100%"; // Estirar para cubrir todo
   frameDiv.style.backgroundRepeat = "no-repeat";
-  
+
   // Z-Index alto para estar encima del canvas (el canvas suele estar en 0)
-  frameDiv.style.zIndex = "10"; 
+  frameDiv.style.zIndex = "10";
 
   // CRÍTICO: Esto permite que los clics pasen a través de la imagen
   // y lleguen al canvas 3D para mover la cámara.
@@ -247,40 +283,133 @@ function createScoreUI() {
   scoreContainer.style.top = "10px";
   scoreContainer.style.right = "10px";
   // Ajusta el tamaño según tu imagen PUNTAJE.png
-  scoreContainer.style.width = "180px"; 
+  scoreContainer.style.width = "180px";
   scoreContainer.style.height = "80px";
-  
+
   // Imagen de fondo
   scoreContainer.style.backgroundImage = 'url("/imagenes/PUNTAJE.png")';
   scoreContainer.style.backgroundSize = "100% 100%"; // Ajustar imagen al contenedor
   scoreContainer.style.backgroundRepeat = "no-repeat";
-  
+
   // Flexbox para centrar el número perfectamente en la imagen
   scoreContainer.style.display = "flex";
   scoreContainer.style.justifyContent = "center"; // Centrado horizontal
-  scoreContainer.style.alignItems = "center";     // Centrado vertical
-  
+  scoreContainer.style.alignItems = "center"; // Centrado vertical
+
   scoreContainer.style.zIndex = "20"; // Encima del marco (que tiene zIndex 10)
   scoreContainer.style.pointerEvents = "none"; // Para que no bloquee clics
-  
+
   // 2. El elemento de texto que solo tendrá el número
   const numberSpan = document.createElement("span");
   numberSpan.id = "treesValue"; // IMPORTANTE: Este ID es el que busca tu listenToTreesCount
   numberSpan.innerText = "0";
-  
+
   // Estilos del texto (número)
   numberSpan.style.color = "#ffffff"; // Color blanco (ajusta según tu imagen)
   numberSpan.style.fontFamily = "system-ui, sans-serif";
   numberSpan.style.fontSize = "32px"; // Tamaño grande
   numberSpan.style.fontWeight = "bold";
   numberSpan.style.textShadow = "2px 2px 4px rgba(0,0,0,0.5)"; // Sombra para legibilidad
-  
+
   // Opcional: Si la imagen tiene el espacio para el texto desplazado, usa padding
-  numberSpan.style.paddingRight = "110px"; 
+  numberSpan.style.paddingRight = "110px";
 
   scoreContainer.appendChild(numberSpan);
   document.body.appendChild(scoreContainer);
 }
+
+function createStageInfoUI() {
+  const container = document.createElement("div");
+  container.id = "stageInfoContainer";
+  container.style.position = "absolute";
+  container.style.top = "0";
+  container.style.left = "0";
+  container.style.width = "100%";
+  container.style.height = "100%";
+  container.style.pointerEvents = "none";
+  container.style.zIndex = "210";
+  document.body.appendChild(container);
+
+  stageInfoCards = stageSlots.map((_, index) => {
+    const card = document.createElement("div");
+    card.style.position = "absolute";
+    card.style.minWidth = "180px";
+    card.style.maxWidth = "220px";
+    card.style.padding = "10px 12px 8px";
+    card.style.borderRadius = "12px";
+    card.style.background =
+      "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
+    card.style.boxShadow = "0 12px 25px rgba(0,0,0,0.5)";
+    card.style.color = "#ffffff";
+    card.style.fontFamily =
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    card.style.fontSize = "12px";
+    card.style.opacity = "0";
+    card.style.transform = "translate(-50%, 0)";
+    card.style.transition = "opacity 0.25s ease-out";
+    card.style.pointerEvents = "none";
+    card.style.overflow = "visible"; // 👈 para que el pointer se vea fuera
+    card.style.textAlign = "left";
+
+    card.innerHTML = `
+      <!-- Pointer que apunta al árbol -->
+      <div
+        class="stage-card-pointer-line"
+        style="
+          position:absolute;
+          top:-22px;
+          left:50%;
+          transform:translateX(-50%);
+          width:2px;
+          height:18px;
+          background:linear-gradient(
+            to top,
+            rgba(255,255,255,0.8),
+            rgba(255,255,255,0)
+          );
+          opacity:0.9;
+        "
+      ></div>
+      <div
+        class="stage-card-pointer-dot"
+        style="
+          position:absolute;
+          top:-26px;
+          left:50%;
+          transform:translateX(-50%);
+          width:8px;
+          height:8px;
+          border-radius:999px;
+          background:rgba(255,255,255,0.95);
+          box-shadow:0 0 10px rgba(255,255,255,0.8);
+        "
+      ></div>
+
+      <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; opacity:.7;">
+        Árbol de
+      </div>
+      <div class="stage-card-name" style="font-size:14px; font-weight:600; margin-top:2px; margin-bottom:4px;">
+        ---
+      </div>
+      <div class="stage-card-dream" style="font-size:11px; line-height:1.4; opacity:.9;">
+        “...”
+      </div>
+    `;
+
+    container.appendChild(card);
+    return card;
+  });
+}
+
+function updateTreesCounterUI() {
+  const el = document.getElementById("treesValue");
+  if (!el) return;
+
+  // Número real de árboles que están en memoria / escena
+  const totalTrees = treeObjects.size;
+  el.innerText = String(totalTrees);
+}
+
 
 // -----------------------------------------------------------------------------
 // Init escena
@@ -325,17 +454,17 @@ function init() {
   createButterflies();
   createBirds();
 
-
   // Marco
   createOverlayFrame();
   createScoreUI();
+  createStageInfoUI(); // cards por árbol destacado
 
   // Botón de audio
   addAudioStartButton();
 
   // Listeners Firestore
   listenToTrees(); // árboles individuales (nombre + sueño + growth)
-  listenToTreesCount(); // contador global para overlay
+  // listenToTreesCount(); // contador global para overlay
   listenToSceneConfig(); // configuración (MAX_TREES, etc.)
   listenToHighlightTrees(); // árboles destacados en pantalla
 
@@ -689,25 +818,25 @@ function createCherryBlossomFlower() {
 function createTextLabel(text, color = "#ffffff") {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
-  const fontSize = 150; // más pequeño que 64 para que no se vean gigantes
+  const fontSize = 220;
   const paddingX = 40;
   const paddingY = 24;
-  const maxWidth = 30000; // por si algún sueño es larguísimo
+  const maxWidth = 30000;
 
   context.font = `600 ${fontSize}px "Segoe UI", system-ui, -apple-system, sans-serif`;
 
-  // Medir texto (si quieres, aquí podrías hacer un wrap a varias líneas, pero lo dejamos simple)
   const textWidth = Math.min(context.measureText(text).width, maxWidth);
 
-  canvas.width = textWidth + paddingX * 2;
-  canvas.height = fontSize + paddingY * 2;
+  // 👉 altura extra para la "colita" que apunta al árbol
+  const pointerHeight = 80;
 
-  // Hay que reconfigurar después de cambiar width/height
+  canvas.width = textWidth + paddingX * 2;
+  canvas.height = fontSize + paddingY * 2 + pointerHeight;
+
   context.font = `600 ${fontSize}px "Segoe UI", system-ui, -apple-system, sans-serif`;
   context.textAlign = "center";
   context.textBaseline = "middle";
 
-  // Fondo redondeado tipo “pill”
   const radius = 30;
   const bgColor = "rgba(0, 0, 0, 0.65)";
   const borderColor = "rgba(255, 255, 255, 0.35)";
@@ -726,39 +855,46 @@ function createTextLabel(text, color = "#ffffff") {
     ctx.closePath();
   }
 
-  roundRect(
-    context,
-    0,
-    0,
-    canvas.width,
-    canvas.height,
-    radius
-  );
+  // 🔹 fondo redondeado (solo la parte del "globo", sin la colita)
+  const bubbleHeight = canvas.height - pointerHeight;
+  roundRect(context, 0, 0, canvas.width, bubbleHeight, radius);
 
-  // Relleno
   context.fillStyle = bgColor;
   context.fill();
 
-  // Borde suave
   context.lineWidth = 4;
   context.strokeStyle = borderColor;
   context.stroke();
 
-  // Sombra del texto
+  // 🔹 "colita" que apunta hacia el árbol (triangulito inferior centrado)
+  const tailWidth = 120; // ancho del triángulo
+  const tailTopY = bubbleHeight - 2; // casi al borde inferior del globo
+  const centerX = canvas.width / 2;
+
+  context.beginPath();
+  context.moveTo(centerX - tailWidth / 2, tailTopY);
+  context.lineTo(centerX + tailWidth / 2, tailTopY);
+  context.lineTo(centerX, canvas.height);
+  context.closePath();
+
+  context.fillStyle = bgColor;
+  context.fill();
+  context.strokeStyle = borderColor;
+  context.stroke();
+
+  // Texto (centrado dentro del globo, no en la colita)
   context.shadowColor = "rgba(0, 0, 0, 0.85)";
   context.shadowBlur = 6;
   context.shadowOffsetX = 2;
   context.shadowOffsetY = 3;
 
-  // Texto
   context.fillStyle = color;
   context.fillText(
     text,
     canvas.width / 2,
-    canvas.height / 2
+    bubbleHeight / 2 // centrado en el globo, no contando pointer
   );
 
-  // Texture y sprite
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
   texture.minFilter = THREE.LinearFilter;
@@ -768,23 +904,22 @@ function createTextLabel(text, color = "#ffffff") {
     map: texture,
     transparent: true,
     depthWrite: false,
-    depthTest: false, // así siempre se ve encima de las hojas
+    depthTest: true,
   });
 
   const sprite = new THREE.Sprite(material);
 
-  // Escala en el mundo 3D (ajusta si los ves muy grandes/pequeños)
-  const pixelsPerUnit = 250; // subir = más pequeño, bajar = más grande
+  // Escala en el mundo 3D
+  const pixelsPerUnit = 250;
   const w = canvas.width / pixelsPerUnit;
   const h = canvas.height / pixelsPerUnit;
   sprite.scale.set(w, h, 1);
 
-  sprite.renderOrder = 999;
-  sprite.userData.isLabel = true; // para identificar en el loop si luego quieres animarlos
+  sprite.renderOrder = 5;
+  sprite.userData.isLabel = true;
 
   return sprite;
 }
-
 
 function createFlowersAndFruits(parent, trunk) {
   const flowersGroup = new THREE.Group();
@@ -833,21 +968,42 @@ function moveTreeToStage(treeId) {
         if (original) {
           oldTree.group.position.copy(original);
         }
+        // ✅ volver a mostrar labels del árbol que sale de tarima
+        oldTree.group.children.forEach((child) => {
+          if (child.isSprite && child.userData.isLabel) {
+            child.visible = true;
+          }
+        });
       }
       slotIndex = 0;
     }
 
     stageSlots[slotIndex] = treeId;
   }
-
   const stagePos = stagePositions[slotIndex];
+  treeObj.group.position.set(stagePos.x, 0, stagePos.z);
 
-  // Guardar posición original si aún no la teníamos
-  if (!treeObj.group.userData.originalPosition) {
-    treeObj.group.userData.originalPosition = treeObj.group.position.clone();
+  // 🔹 Añadir halo en el piso si no existe
+  if (!treeObj.group.getObjectByName("stageHalo")) {
+    const haloGeom = new THREE.CircleGeometry(2.5, 32);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0xfff2a8,
+      transparent: true,
+      opacity: 0.5,
+    });
+    const halo = new THREE.Mesh(haloGeom, haloMat);
+    halo.name = "stageHalo";
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.01;
+    treeObj.group.add(halo);
   }
 
-  treeObj.group.position.set(stagePos.x, 0, stagePos.z);
+  // Ocultar labels flotantes
+  treeObj.group.children.forEach((child) => {
+    if (child.isSprite && child.userData.isLabel) {
+      child.visible = false;
+    }
+  });
 }
 
 function showTreeLabel(meta) {
@@ -856,23 +1012,75 @@ function showTreeLabel(meta) {
     label = document.createElement("div");
     label.id = "treeLabel";
     label.style.position = "absolute";
-    label.style.bottom = "20px";
-    label.style.right = "20px";
-    label.style.maxWidth = "320px";
-    label.style.padding = "12px 16px";
-    label.style.borderRadius = "12px";
-    label.style.background = "rgba(0,0,0,0.7)";
-    label.style.color = "#fff";
-    label.style.fontFamily = "system-ui, sans-serif";
+    label.style.bottom = "32px";
+    label.style.right = "32px";
+    label.style.maxWidth = "420px";
+    label.style.padding = "16px 20px";
+    label.style.borderRadius = "18px";
+    label.style.background =
+      "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
+    label.style.boxShadow = "0 18px 40px rgba(0,0,0,0.55)";
+    label.style.color = "#ffffff";
+    label.style.fontFamily =
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     label.style.zIndex = "200";
+    label.style.backdropFilter = "blur(12px)";
+    label.style.border = "1px solid rgba(255, 255, 255, 0.18)";
+    label.style.pointerEvents = "none"; // solo display, no bloquea nada
     document.body.appendChild(label);
   }
 
-  // label.innerHTML = `
-  //   <div style="font-size:13px; opacity:.8;">Árbol de</div>
-  //   <div style="font-size:18px; font-weight:600;">${meta.userName}</div>
-  //   <div style="margin-top:8px; font-size:14px;">"${meta.dream}"</div>
-  // `;
+  label.innerHTML = `
+    <div style="font-size:12px; letter-spacing:0.12em; text-transform:uppercase; opacity:.75; margin-bottom:4px;">
+      Árbol de
+    </div>
+    <div style="font-size:22px; font-weight:700; margin-bottom:8px;">
+      ${meta.userName}
+    </div>
+    <div style="font-size:14px; line-height:1.5; opacity:.9;">
+      “${meta.dream}”
+    </div>
+  `;
+}
+
+const _projVector = new THREE.Vector3();
+
+function updateStageInfoUI() {
+  if (!camera || !renderer || !stageInfoCards) return;
+
+  for (let i = 0; i < STAGE_SLOTS; i++) {
+    const treeId = stageSlots[i];
+    const card = stageInfoCards[i];
+    if (!card) continue;
+
+    if (!treeId || !treeObjects.has(treeId)) {
+      card.style.opacity = "0";
+      continue;
+    }
+
+    const treeObj = treeObjects.get(treeId);
+    const group = treeObj.group;
+
+    // Punto de referencia: un poco por debajo del árbol (en el mundo)
+    const worldPos = group.position.clone();
+    worldPos.y = 0; // base del tronco
+
+    // Proyectamos a coordenadas de pantalla
+    _projVector.copy(worldPos).project(camera);
+
+    const x = (_projVector.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-_projVector.y * 0.5 + 0.5) * window.innerHeight + 50; // un poco abajo
+
+    card.style.left = `${x}px`;
+    card.style.top = `${y}px`;
+    card.style.opacity = "1";
+
+    // Actualizar contenido
+    const nameEl = card.querySelector(".stage-card-name");
+    const dreamEl = card.querySelector(".stage-card-dream");
+    if (nameEl) nameEl.textContent = group.userData.userName || "—";
+    if (dreamEl) dreamEl.textContent = `“${group.userData.dream || ""}”`;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -935,7 +1143,10 @@ function animate() {
       );
     });
 
-    const scale = 0.1 + localProgress * 0.9;
+    // Dentro de animate(), donde ajustas el scale según growth
+    const baseScale = 0.06; // antes 0.1
+    const extraScale = 0.5; // antes 0.9 (máx ahora ~0.56)
+    const scale = baseScale + localProgress * extraScale;
     group.scale.set(scale, scale, scale);
 
     flowers.children.forEach((flower) => {
@@ -1039,6 +1250,9 @@ function animate() {
       }
     });
   });
+
+  // Actualizar posiciones de las cards de la tarima
+  updateStageInfoUI();
 
   renderer.render(scene, camera);
 }

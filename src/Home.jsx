@@ -20,9 +20,36 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, ensureAnonymousUser, auth } from "./firebaseConfig";
+import { signOut } from "firebase/auth";
 
 const usersCollection = collection(db, "users");
 const treesCollection = collection(db, "trees");
+
+// Zona que queremos reservar SOLO para destacados
+const STAGE_ZONE = {
+  minX: -25,
+  maxX: 25,
+  minZ: 8, // delante
+  maxZ: 30,
+};
+
+function getRandomTreePosition() {
+  let x, z;
+
+  do {
+    // área general del bosque
+    x = (Math.random() - 0.5) * 40; // -20 a 20
+    z = (Math.random() - 0.5) * 40; // -20 a 20
+    // repetimos mientras caiga DENTRO de la zona de tarima
+  } while (
+    x > STAGE_ZONE.minX &&
+    x < STAGE_ZONE.maxX &&
+    z > STAGE_ZONE.minZ &&
+    z < STAGE_ZONE.maxZ
+  );
+
+  return { x, z };
+}
 
 export default function Home({ navigate }) {
   const [loading, setLoading] = useState(true);
@@ -70,8 +97,7 @@ export default function Home({ navigate }) {
 
     setCreating(true);
     try {
-      const x = (Math.random() - 0.5) * 40;
-      const z = (Math.random() - 0.5) * 40;
+      const { x, z } = getRandomTreePosition();
 
       const treeDoc = await addDoc(treesCollection, {
         userId: user.uid,
@@ -161,6 +187,41 @@ export default function Home({ navigate }) {
       alert("No pudimos mostrar tu árbol, inténtalo de nuevo.");
     }
   }
+
+  // Función para cerrar sesión
+  const handleLogout = async () => {
+    try {
+      await signOut(auth); // Cierra sesión en Firebase
+      setUserDoc(null); // Limpia el estado del usuario local
+      setName(""); // Limpia el formulario
+      setDream("");
+      setCareScreen("intro"); // Resetea la pantalla
+      // Opcional: recargar la página para asegurar una sesión anónima nueva y limpia
+      // window.location.reload();
+    } catch (error) {
+      console.error("Error al salir:", error);
+    }
+  };
+
+  // Componente visual del botón para no repetir código
+  const LogoutButton = () => (
+    <Button
+      variant="subtle"
+      color="red"
+      compact
+      onClick={handleLogout}
+      style={{
+        position: "absolute",
+        top: "20px",
+        right: "20px",
+        zIndex: 1000,
+        backgroundColor: "rgba(255, 255, 255, 0.8)", // Fondo semitransparente para que se vea
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      ✖ Salir
+    </Button>
+  );
 
   // --- Cargando ---
   if (loading) {
@@ -273,8 +334,10 @@ export default function Home({ navigate }) {
           flexDirection: "column",
           justifyContent: "space-between",
           padding: "1.5rem",
+          position: "relative",
         }}
       >
+        <LogoutButton />
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "center" }}>
           <img
@@ -363,6 +426,7 @@ export default function Home({ navigate }) {
           'url("/imagenes/CUIDAR/APP_CONGRESO-DE-EDUACION_FONDO.jpg")',
         backgroundSize: "cover",
         backgroundPosition: "center",
+        position: "relative",
       }}
     >
       <div
@@ -375,6 +439,7 @@ export default function Home({ navigate }) {
           padding: "1.5rem",
         }}
       >
+        <LogoutButton />
         {/* Logo superior */}
         <div style={{ display: "flex", justifyContent: "center" }}>
           <img

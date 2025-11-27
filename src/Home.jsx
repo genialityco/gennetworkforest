@@ -9,7 +9,9 @@ import {
   Stack,
   Group,
   Loader,
-  Modal
+  Modal,
+  Progress,
+  Badge
 } from "@mantine/core";
 import {
   doc,
@@ -19,6 +21,7 @@ import {
   collection,
   updateDoc,
   serverTimestamp,
+  onSnapshot,
 } from "firebase/firestore";
 import { db, ensureAnonymousUser, auth } from "./firebaseConfig";
 import { signOut } from "firebase/auth";
@@ -91,6 +94,23 @@ export default function Home({ navigate }) {
     };
     init();
   }, []);
+
+  // Este efecto escucha cambios en el ÁRBOL en tiempo real
+  useEffect(() => {
+    if (!userDoc?.treeId) return;
+
+    const treeRef = doc(db, "trees", userDoc.treeId);
+
+    // Suscripción en tiempo real
+    const unsubscribe = onSnapshot(treeRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setTreeGrowth(data.growth || 0); // Actualiza la barra y el modal automáticamente
+      }
+    });
+
+    return () => unsubscribe();
+  }, [userDoc]);
 
   // 2) Crear usuario + árbol
   async function handleCreateUserAndTree() {
@@ -179,8 +199,7 @@ export default function Home({ navigate }) {
     }
   }
 
-
-    async function handleViewTree() {
+  async function handleViewTree() {
     if (!userDoc?.treeId) return;
 
     try {
@@ -486,6 +505,33 @@ export default function Home({ navigate }) {
             <Text mt="xs" fw={600}>
               “{userDoc.dream}”
             </Text>
+
+            <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>
+              Crecimiento del árbol
+            </Text>
+            <Group position="apart" mb={5}>
+              <Text
+                size="sm"
+                fw={700}
+                color={treeGrowth >= 100 ? "yellow" : "green"}
+              >
+                {Math.floor(treeGrowth)}%
+              </Text>
+              {treeGrowth >= 100 && (
+                <Badge color="yellow" variant="filled">
+                  ¡Completado!
+                </Badge>
+              )}
+            </Group>
+
+            <Progress
+              value={treeGrowth}
+              color={treeGrowth >= 100 ? "yellow" : "green"}
+              size="xl"
+              radius="xl"
+              striped={treeGrowth < 100}
+              animated={treeGrowth < 100}
+            />
           </Card>
         </div>
 
@@ -495,22 +541,18 @@ export default function Home({ navigate }) {
             {/* Regar */}
             <button
               onClick={handleWater}
-              disabled={watering}
-              aria-label="Regar planta"
-              style={{
-                border: "none",
-                background: "none",
-                padding: 0,
-              }}
+              disabled={watering || treeGrowth >= 100} // Deshabilitar si está lleno
+              style={{ border: "none", background: "none", padding: 0 }}
             >
               <img
                 src="/imagenes/CUIDAR/ICONO-01.png"
-                alt="Regar planta"
+                alt="Regar"
                 style={{
                   width: 90,
                   height: 90,
                   objectFit: "contain",
-                  opacity: watering ? 0.6 : 1,
+                  opacity: watering || treeGrowth >= 100 ? 0.5 : 1, // Opacidad visual
+                  filter: treeGrowth >= 100 ? "grayscale(100%)" : "none",
                 }}
               />
             </button>
@@ -518,22 +560,18 @@ export default function Home({ navigate }) {
             {/* Abonar */}
             <button
               onClick={handleFertilize}
-              disabled={fertilizing}
-              aria-label="Abonar planta"
-              style={{
-                border: "none",
-                background: "none",
-                padding: 0,
-              }}
+              disabled={fertilizing || treeGrowth >= 100} // Deshabilitar si está lleno
+              style={{ border: "none", background: "none", padding: 0 }}
             >
               <img
                 src="/imagenes/CUIDAR/ICONO-02.png"
-                alt="Abonar planta"
+                alt="Abonar"
                 style={{
                   width: 90,
                   height: 90,
                   objectFit: "contain",
-                  opacity: fertilizing ? 0.6 : 1,
+                  opacity: fertilizing || treeGrowth >= 100 ? 0.5 : 1,
+                  filter: treeGrowth >= 100 ? "grayscale(100%)" : "none",
                 }}
               />
             </button>
@@ -554,46 +592,42 @@ export default function Home({ navigate }) {
         </div>
       </div>
       <Modal
-  opened={showTree3D}
-  onClose={() => setShowTree3D(false)}
-  fullScreen
-  padding={0}
-  withCloseButton
-  styles={{
-    body: { height: "100vh", background: "#000" },
-  }}
->
-  
-    
-    <UserTree3D grow={treeGrowth} />
+        opened={showTree3D}
+        onClose={() => setShowTree3D(false)}
+        fullScreen
+        padding={0}
+        withCloseButton
+        styles={{
+          body: { height: "100vh", background: "#000" },
+        }}
+      >
+        <UserTree3D grow={treeGrowth} />
 
-   
-
-  {/* Overlay UI */}
-  <div
-    style={{
-      position: "absolute",
-      bottom: 20,
-      width: "100%",
-      display: "flex",
-      justifyContent: "center",
-      pointerEvents: "none",
-    }}
-  >
-    <Card
-      radius="xl"
-      p="sm"
-      style={{
-        backgroundColor: "rgba(255,255,255,0.9)",
-        pointerEvents: "auto",
-      }}
-    >
-      <Text fw={600} ta="center">
-        Crecimiento: {treeGrowth}%
-      </Text>
-    </Card>
-  </div>
-</Modal>
+        {/* Overlay UI */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 20,
+            width: "100%",
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <Card
+            radius="xl"
+            p="sm"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.9)",
+              pointerEvents: "auto",
+            }}
+          >
+            <Text fw={600} ta="center">
+              Crecimiento: {treeGrowth}%
+            </Text>
+          </Card>
+        </div>
+      </Modal>
     </div>
   );
 }

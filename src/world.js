@@ -367,6 +367,30 @@ const stagePositions = [
 ];
 
 // -----------------------------------------------------------------------------
+// 🏷️ Helper para la etiqueta de Porcentaje
+// -----------------------------------------------------------------------------
+function createGrowthLabel(growth, baseHeight) {
+  const safeGrowth = Math.floor(growth || 0);
+  const isFull = safeGrowth >= 100;
+  
+  // Color: Dorado si está lleno, verde claro si está creciendo
+  const color = isFull ? "#FFD700" : "#aaffaa"; 
+  const text = isFull ? "¡COMPLETO! 🌟" : `${safeGrowth}%`;
+
+  // Reutilizamos tu función createTextLabel existente
+  const sprite = createTextLabel(text, color);
+  
+  // Posición: La ponemos debajo del "Sueño" (height + 5.0)
+  // Recuerda: Name está en +7.5, Dream en +6.2
+  sprite.position.set(0, baseHeight + 5.0, 0); 
+  
+  // Hacemos que sea un poco más pequeña que las otras etiquetas
+  sprite.scale.multiplyScalar(0.85); 
+
+  return sprite;
+}
+
+// -----------------------------------------------------------------------------
 // Firestore listeners
 // -----------------------------------------------------------------------------
 
@@ -378,6 +402,9 @@ function listenToTrees() {
         const docId = change.doc.id;
         const data = change.doc.data();
 
+        // ---------------------------------------------------------------------
+        // 1. Árbol NUEVO (added)
+        // ---------------------------------------------------------------------
         if (change.type === "added") {
           const { x, z } = data;
           const height = 5 + Math.random() * 3;
@@ -392,8 +419,10 @@ function listenToTrees() {
             originalPosition: treeObj.group.position.clone(),
           };
 
+          // Inicializar estado visual
           const initialGrowth = treeObj.group.userData.growth;
           const initialStage = getGrowthStage(initialGrowth);
+          
           treeObj.group.userData.growthState = {
             lastStage: initialStage,
             nextEffectThreshold: Math.floor(Math.max(0, initialGrowth)) + 1,
@@ -407,14 +436,22 @@ function listenToTrees() {
           const initialScale = getScaleForGrowth(initialGrowth);
           treeObj.group.scale.setScalar(initialScale);
 
+          // --- ETIQUETAS ---
+          // 1. Nombre
           const nameLabel = createTextLabel(data.userName, "#fffaf0");
           nameLabel.position.set(0, height + 7.5, 0);
+          treeObj.group.add(nameLabel);
 
+          // 2. Sueño
           const dreamLabel = createTextLabel(`"${data.dream}"`, "#ffd6e9");
           dreamLabel.position.set(0, height + 6.2, 0);
-
-          treeObj.group.add(nameLabel);
           treeObj.group.add(dreamLabel);
+
+          // 3. NUEVO: Etiqueta de Porcentaje 🟢
+          const growthLabel = createGrowthLabel(initialGrowth, height);
+          treeObj.group.add(growthLabel);
+          // Guardamos referencia en userData para poder borrarla y actualizarla luego
+          treeObj.group.userData.growthLabelSprite = growthLabel; 
 
           treeObjects.set(docId, treeObj);
 
@@ -422,14 +459,39 @@ function listenToTrees() {
           treeCount = Math.min(treeCount, MAX_TREES);
         }
 
+        // ---------------------------------------------------------------------
+        // 2. Árbol MODIFICADO (modified) - Alguien lo regó
+        // ---------------------------------------------------------------------
         if (change.type === "modified") {
           const treeObj = treeObjects.get(docId);
           if (treeObj) {
-            treeObj.group.userData.growth = data.growth ?? 0;
+            const newGrowth = data.growth ?? 0;
+            const oldGrowth = treeObj.group.userData.growth;
+
+            treeObj.group.userData.growth = newGrowth;
             treeObj.group.userData.state = data.state ?? "SEED";
+
+            // Si el porcentaje cambió, actualizamos la etiqueta visual
+            if (newGrowth !== oldGrowth) {
+              // A. Borrar etiqueta vieja
+              if (treeObj.group.userData.growthLabelSprite) {
+                treeObj.group.remove(treeObj.group.userData.growthLabelSprite);
+              }
+              
+              // B. Crear etiqueta nueva con el nuevo valor
+              // Usamos treeObj.baseHeight para mantener la posición correcta
+              const newLabel = createGrowthLabel(newGrowth, treeObj.baseHeight);
+              treeObj.group.add(newLabel);
+              
+              // C. Guardar la nueva referencia
+              treeObj.group.userData.growthLabelSprite = newLabel;
+            }
           }
         }
 
+        // ---------------------------------------------------------------------
+        // 3. Árbol ELIMINADO (removed)
+        // ---------------------------------------------------------------------
         if (change.type === "removed") {
           const treeObj = treeObjects.get(docId);
           if (treeObj) {
@@ -440,7 +502,6 @@ function listenToTrees() {
         }
       });
 
-      // 🔹 Actualizar el contador visible según los árboles que realmente están en escena
       updateTreesCounterUI();
     },
     (error) => {
@@ -698,8 +759,7 @@ function createStageInfoUI() {
     card.style.transition =
       "opacity 0.25s ease-out, transform 0.25s ease-out, box-shadow 0.25s ease-out";
 
-    card.innerHTML = `
-      <!-- Pointer que apunta al árbol -->
+card.innerHTML = `
       <div
         class="stage-card-pointer-line"
         style="
@@ -709,11 +769,7 @@ function createStageInfoUI() {
           transform:translateX(-50%);
           width:2px;
           height:18px;
-          background:linear-gradient(
-            to top,
-            rgba(255,255,255,0.8),
-            rgba(255,255,255,0)
-          );
+          background:linear-gradient(to top, rgba(255,255,255,0.8), rgba(255,255,255,0));
           opacity:0.9;
         "
       ></div>
@@ -732,10 +788,15 @@ function createStageInfoUI() {
         "
       ></div>
 
-      <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; opacity:.7;">
-        Árbol de
+      <div style="display: flex; justify-content: space-between; align-items: baseline; font-size:10px; letter-spacing:0.14em; text-transform:uppercase; margin-bottom: 2px;">
+         <span style="opacity:.7;">Árbol de</span>
+         
+         <span class="stage-card-growth" style="color: #aaffaa; font-weight: 700;">
+            0%
+         </span>
       </div>
-      <div class="stage-card-name" style="font-size:22px; font-weight:600; margin-top:2px; margin-bottom:4px;">
+
+      <div class="stage-card-name" style="font-size:22px; font-weight:600; margin-top:0px; margin-bottom:4px;">
         ---
       </div>
       <div class="stage-card-dream" style="font-size:18px; line-height:1.4; opacity:.9;">
@@ -2308,25 +2369,41 @@ function updateStageInfoUI() {
     const treeObj = treeObjects.get(treeId);
     const group = treeObj.group;
 
-    // Punto de referencia: un poco por debajo del árbol (en el mundo)
-    const worldPos = group.position.clone();
-    worldPos.y = 0; // base del tronco
+    // Obtener crecimiento
+    const growth = group.userData.growth || 0;
 
-    // Proyectamos a coordenadas de pantalla
+    // Punto de referencia
+    const worldPos = group.position.clone();
+    worldPos.y = 0; 
     _projVector.copy(worldPos).project(camera);
 
     const x = (_projVector.x * 0.5 + 0.5) * window.innerWidth;
-    const y = (-_projVector.y * 0.5 + 0.5) * window.innerHeight + 50; // un poco abajo
+    const y = (-_projVector.y * 0.5 + 0.5) * window.innerHeight + 50; 
 
     card.style.left = `${x}px`;
     card.style.top = `${y}px`;
     card.style.opacity = "1";
 
-    // Actualizar contenido
+    // Actualizar Textos
     const nameEl = card.querySelector(".stage-card-name");
     const dreamEl = card.querySelector(".stage-card-dream");
+    
+    // --- NUEVO: Actualizar Porcentaje ---
+    const growthEl = card.querySelector(".stage-card-growth");
+    
     if (nameEl) nameEl.textContent = group.userData.userName || "—";
     if (dreamEl) dreamEl.textContent = `“${group.userData.dream || ""}”`;
+    
+    if (growthEl) {
+      const val = Math.floor(growth);
+      if (val >= 100) {
+         growthEl.textContent = "100% ✨";
+         growthEl.style.color = "#FFD700"; // Dorado si está completo
+      } else {
+         growthEl.textContent = val + "%";
+         growthEl.style.color = "#aaffaa"; // Verde claro normal
+      }
+    }
   }
 }
 

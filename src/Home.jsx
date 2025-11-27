@@ -507,7 +507,7 @@ export default function Home({ navigate }) {
             </Text>
 
             <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>
-              Crecimiento del árbol
+              Crecimiento del árbol, hazlo crecer, regándolo y abonándolo
             </Text>
             <Group position="apart" mb={5}>
               <Text

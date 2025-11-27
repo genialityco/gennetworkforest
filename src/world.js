@@ -5,6 +5,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { ImprovedNoise } from "three/examples/jsm/math/ImprovedNoise.js";
 import { createNoise3D } from "simplex-noise";
 import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
@@ -674,27 +675,41 @@ function createClouds() {
 }
 
 function createTerrain() {
-  const size = 50;
-  const segments = 100;
+  const size = 100;
+  const segments = 150;
   const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
 
   const vertices = geometry.attributes.position.array;
+  const noise = new ImprovedNoise();
+  
+  // Apply Perlin noise for natural terrain elevation
   for (let i = 0; i < vertices.length; i += 3) {
-    vertices[i + 2] += (Math.random() - 0.5) * 2;
+    const x = vertices[i];
+    const y = vertices[i + 1];
+    
+    // Multi-octave noise for more natural terrain
+    let elevation = 0;
+    elevation += noise.noise(x * 0.1, y * 0.1, 0) * 3.0;      // Large features
+    elevation += noise.noise(x * 0.2, y * 0.2, 1) * 1.5;      // Medium features
+    elevation += noise.noise(x * 0.4, y * 0.4, 2) * 0.5;      // Small details
+    
+    vertices[i + 2] = elevation;
   }
+  
   geometry.computeVertexNormals();
 
   const material = new THREE.MeshStandardMaterial({
-    color: 0xddeeff,
+    color: 0x6ac46a,  // Natural grass green
     side: THREE.DoubleSide,
-    flatShading: true,
-    roughness: 0.7,
+    flatShading: false,  // Smooth shading for natural look
+    roughness: 1.0,
     metalness: 0.0,
   });
 
   terrain = new THREE.Mesh(geometry, material);
   terrain.rotation.x = -Math.PI / 2;
   terrain.position.y = -1;
+  terrain.receiveShadow = true;
   scene.add(terrain);
 }
 
@@ -756,19 +771,60 @@ function createLeafCanopy(parent, trunk) {
   const canopyGroup = new THREE.Group();
   parent.add(canopyGroup);
 
-  const canopyMaterial = new THREE.MeshStandardMaterial({
-    color: 0xddeeff,
-    flatShading: true,
-    roughness: 0.7,
-    metalness: 0.0,
-  });
+  // Shared time uniform for all canopy leaves
+  const timeUniform = { value: 0 };
 
   for (let i = 0; i < 5; i++) {
     const canopyGeometry = new THREE.SphereGeometry(2.5 - i * 0.4 + Math.random() * 0.3, 8, 8);
+    
+    const canopyMaterial = new THREE.MeshStandardMaterial({
+      color: 0xddeeff,
+      flatShading: true,
+      roughness: 0.7,
+      metalness: 0.0,
+    });
+
+    // Store time uniform reference
+    canopyMaterial.userData.time = timeUniform;
+    
+    // Add wind animation shader
+    canopyMaterial.onBeforeCompile = (shader) => {
+      // Add time uniform
+      shader.uniforms.time = timeUniform;
+      
+      // Inject uniform declaration and varying
+      shader.vertexShader = `
+        uniform float time;
+        ${shader.vertexShader}
+      `;
+      
+      // Replace the transform code to add wind effect
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `
+        #include <begin_vertex>
+        
+        // Wind sway effect - more movement at the top
+        float windStrength = (position.y + 3.0) / 6.0;
+        transformed.x += sin(time * 1.5 + position.y * 0.5 + ${Math.random() * 6.28}) * windStrength * 0.15;
+        transformed.z += cos(time * 1.2 + position.x * 0.3 + ${Math.random() * 6.28}) * windStrength * 0.1;
+        `
+      );
+      
+      // Mark that we need to update uniforms
+      shader.uniforms.time = timeUniform;
+    };
+    
+    canopyMaterial.customProgramCacheKey = () => 'wind-shader';
+    
     const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
     canopy.position.set((Math.random() - 0.5) * 0.5, trunk.position.y + 2 + i * 1.5, (Math.random() - 0.5) * 0.5);
     canopyGroup.add(canopy);
   }
+  
+  // Store time uniform on the group for easy access
+  canopyGroup.userData.timeUniform = timeUniform;
+  
   return canopyGroup;
 }
 
@@ -1094,6 +1150,12 @@ function animate() {
     const localProgress = Math.max(0, Math.min(growth / 100, 1));
 
     trunk.material.color.lerpColors(new THREE.Color(0x8b5a2b), new THREE.Color(0x8b5a2b), progress);
+    
+    // Update wind animation time for canopy
+    if (canopy.userData.timeUniform) {
+      canopy.userData.timeUniform.value = elapsedTime;
+    }
+    
     canopy.children.forEach((leaf) => {
       leaf.material.color.lerpColors(new THREE.Color(0xddeeff), new THREE.Color(0x228b22), progress);
     });

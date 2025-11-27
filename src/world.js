@@ -323,19 +323,24 @@ const stageSlots = new Array(STAGE_SLOTS).fill(null);
 
 let stageInfoCards = new Array(STAGE_SLOTS).fill(null); // cards HTML por slot
 
+let lastPrimaryHighlightedId = null;
+let recentHighlightTimeout = null;
+
+const MAIN_STAGE_SLOT_INDEX = 5;
+
 // Todos con el mismo z (más o menos al frente de la cámara)
 // y x repartidos simétricamente
 const stagePositions = [
-  { x: -22, z: 20 },
-  { x: -21, z: 14 },
-  { x: -12, z: 20 },
-  { x: -9, z: 14 },
-  { x: -3, z: 20 },
-  { x: 3, z: 20 },
-  { x: 9, z: 14 },
-  { x: 12, z: 20 },
-  { x: 21, z: 14 },
-  { x: 22, z: 20 },
+  { x: -32, z: 23 },
+  { x: -29, z: 14 },
+  { x: -16, z: 24 },
+  { x: -12, z: 14 },
+  { x: -4.5, z: 25 },
+  { x: 4.5, z: 25 },
+  { x: 12, z: 14 },
+  { x: 16, z: 24 },
+  { x: 29, z: 14 },
+  { x: 32, z: 23 },
 ];
 
 // -----------------------------------------------------------------------------
@@ -511,18 +516,54 @@ function listenToHighlightTrees() {
         stageSlots[i] = null;
       }
 
-      // 4) Asignamos los nuevos destacados a slots y los movemos al frente
-      let index = 0;
+      // 4) Obtenemos IDs en orden (el primero es el más reciente)
+      const docIds = [];
       snapshot.forEach((docSnap) => {
-        const treeId = docSnap.id;
-        if (!treeObjects.has(treeId)) return; // por si aún no está cargado
-
-        if (index < STAGE_SLOTS) {
-          stageSlots[index] = treeId;
-          moveTreeToStage(treeId);
-          index++;
-        }
+        docIds.push(docSnap.id);
       });
+
+      if (docIds.length === 0) {
+        // No hay destacados
+        lastPrimaryHighlightedId = null;
+        highlightPrimaryStageCard(null);
+        return;
+      }
+
+      const mainId = docIds[0];
+
+      // 5) Asignar el más reciente al slot central
+      stageSlots[MAIN_STAGE_SLOT_INDEX] = mainId;
+
+      // 6) Asignar el resto a cualquier slot libre
+      let slotCursor = 0;
+      for (let idx = 1; idx < docIds.length; idx++) {
+        const treeId = docIds[idx];
+
+        // Buscar el siguiente slot libre
+        while (
+          slotCursor < STAGE_SLOTS &&
+          stageSlots[slotCursor] !== null
+        ) {
+          slotCursor++;
+        }
+        if (slotCursor >= STAGE_SLOTS) break;
+
+        stageSlots[slotCursor] = treeId;
+      }
+
+      // 7) Mover árboles a sus posiciones de tarima
+      for (let i = 0; i < STAGE_SLOTS; i++) {
+        const treeId = stageSlots[i];
+        if (!treeId) continue;
+        if (!treeObjects.has(treeId)) continue;
+        moveTreeToStage(treeId);
+      }
+
+      // 8) Si el destacado principal cambió, disparamos el efecto visual en su label
+      if (mainId !== lastPrimaryHighlightedId) {
+        highlightPrimaryStageCard(mainId);
+        lastPrimaryHighlightedId = mainId;
+      }
     },
     (error) => {
       console.error("Error en highlight trees:", error);
@@ -626,8 +667,10 @@ function createStageInfoUI() {
     card.style.transform = "translate(-50%, 0)";
     card.style.transition = "opacity 0.25s ease-out";
     card.style.pointerEvents = "none";
-    card.style.overflow = "visible"; // 👈 para que el pointer se vea fuera
+    card.style.overflow = "visible";
     card.style.textAlign = "left";
+    card.style.transition = "opacity 0.25s ease-out, transform 0.25s ease-out, box-shadow 0.25s ease-out";
+
 
     card.innerHTML = `
       <!-- Pointer que apunta al árbol -->
@@ -666,10 +709,10 @@ function createStageInfoUI() {
       <div style="font-size:10px; letter-spacing:0.14em; text-transform:uppercase; opacity:.7;">
         Árbol de
       </div>
-      <div class="stage-card-name" style="font-size:14px; font-weight:600; margin-top:2px; margin-bottom:4px;">
+      <div class="stage-card-name" style="font-size:22px; font-weight:600; margin-top:2px; margin-bottom:4px;">
         ---
       </div>
-      <div class="stage-card-dream" style="font-size:11px; line-height:1.4; opacity:.9;">
+      <div class="stage-card-dream" style="font-size:18px; line-height:1.4; opacity:.9;">
         “...”
       </div>
     `;
@@ -679,6 +722,73 @@ function createStageInfoUI() {
   });
 }
 
+function highlightPrimaryStageCard(treeId) {
+  if (!stageInfoCards || !stageSlots) return;
+
+  // Quitar highlight anterior
+  stageInfoCards.forEach((card) => {
+    if (!card) return;
+    card.style.boxShadow = "0 12px 25px rgba(0,0,0,0.5)";
+    card.style.transform = "translate(-50%, 0) scale(1)";
+    const badge = card.querySelector(".stage-card-badge");
+    if (badge) {
+      badge.style.opacity = "0";
+    }
+  });
+
+  if (!treeId) return;
+
+  const slotIndex = stageSlots.indexOf(treeId);
+  if (slotIndex === -1) return;
+
+  const card = stageInfoCards[slotIndex];
+  if (!card) return;
+
+  // Pequeño glow + escala para resaltar
+  card.style.boxShadow =
+    "0 0 0 2px rgba(255, 215, 0, 0.85), 0 0 30px rgba(255, 215, 0, 0.75)";
+  card.style.transform = "translate(-50%, 0) scale(1.08)";
+
+  // Badge "Nuevo destacado ✨"
+  let badge = card.querySelector(".stage-card-badge");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.className = "stage-card-badge";
+    badge.textContent = "Nuevo destacado ✨";
+    badge.style.position = "absolute";
+    badge.style.top = "-10px";
+    badge.style.right = "-4px";
+    badge.style.padding = "3px 8px";
+    badge.style.borderRadius = "999px";
+    badge.style.fontSize = "9px";
+    badge.style.fontWeight = "600";
+    badge.style.letterSpacing = "0.08em";
+    badge.style.textTransform = "uppercase";
+    badge.style.background = "linear-gradient(135deg,#ffd54f,#ffb300)";
+    badge.style.color = "#2b1900";
+    badge.style.boxShadow = "0 0 12px rgba(0,0,0,0.5)";
+    badge.style.opacity = "0";
+    badge.style.transition = "opacity 0.25s ease-out";
+    card.appendChild(badge);
+  }
+  badge.style.opacity = "1";
+
+  // Limpiar timeout anterior si existía
+  if (recentHighlightTimeout) {
+    clearTimeout(recentHighlightTimeout);
+  }
+
+  // Después de unos segundos se apaga el efecto
+  recentHighlightTimeout = setTimeout(() => {
+    card.style.boxShadow = "0 12px 25px rgba(0,0,0,0.5)";
+    card.style.transform = "translate(-50%, 0) scale(1)";
+    if (badge) {
+      badge.style.opacity = "0";
+    }
+  }, 4000); // 4 segundos de "nuevo destacado"
+}
+
+
 function updateTreesCounterUI() {
   const el = document.getElementById("treesValue");
   if (!el) return;
@@ -686,6 +796,35 @@ function updateTreesCounterUI() {
   // Número real de árboles que están en memoria / escena
   const totalTrees = treeObjects.size;
   el.innerText = String(totalTrees);
+}
+
+function createLogoUI() {
+  const logoContainer = document.createElement("div");
+  
+  // Estilos de posición
+  logoContainer.style.position = "absolute";
+  logoContainer.style.top = "20px";   // Un poco de margen superior
+  logoContainer.style.left = "20px";  // Lado IZQUIERDO (el espacio vacío)
+  
+  // Ajusta este ancho según el tamaño real de tu logo
+  logoContainer.style.width = "200px"; 
+  logoContainer.style.height = "auto";
+  
+  // Z-Index alto para estar encima del canvas y del marco
+  logoContainer.style.zIndex = "25"; 
+  
+  // Ignorar clics para no bloquear la interacción 3D
+  logoContainer.style.pointerEvents = "none";
+
+  // Crear la imagen
+  const img = document.createElement("img");
+  img.src = "/imagenes/Logo-congreso-v2.png";
+  img.style.width = "100%"; // Se ajusta al ancho del contenedor
+  img.style.height = "auto";
+  img.style.display = "block"; // Evita espacios extra debajo de la imagen
+
+  logoContainer.appendChild(img);
+  document.body.appendChild(logoContainer);
 }
 
 // -----------------------------------------------------------------------------
@@ -733,6 +872,8 @@ function init() {
   createOverlayFrame();
   createScoreUI();
   createStageInfoUI(); // cards por árbol destacado
+
+  createLogoUI();
 
   // Botón de audio
   addAudioStartButton();

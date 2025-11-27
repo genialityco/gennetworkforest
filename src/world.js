@@ -16,6 +16,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
+import { createLowPolyBalloon } from "./hotAirBalloon.js";
 
 const treesCollection = collection(db, "trees");
 const treeObjects = new Map(); // key: treeId, value: tree metadata (group, stage visuals, etc.)
@@ -32,7 +33,10 @@ let scene,
   sky,
   clouds;
 // Declare global variables for new elements
-let sun, sunlight, butterflies, birds, frogs;
+let sun, sunlight, butterflies, birds, frogs, hotAirBalloon;
+let balloonVelocity;
+
+const BALLOON_BOUNDS = { x: 36, z: 6 };
 
 // Tree counting
 let treeCount = 0;
@@ -1079,6 +1083,10 @@ function init() {
   createClouds();
   createTerrain();
   createIceLayer();
+  hotAirBalloon = createLowPolyBalloon();
+  hotAirBalloon.position.set(-24, 20, -18);
+  balloonVelocity = new THREE.Vector3(0.02, 0, 0);
+  scene.add(hotAirBalloon);
   createSun();
   createButterflies();
   createBirds();
@@ -2441,6 +2449,36 @@ function animate() {
     cloud.position.x += 0.02;
     if (cloud.position.x > 50) cloud.position.x = -50;
   });
+
+  if (hotAirBalloon && balloonVelocity) {
+    hotAirBalloon.position.add(balloonVelocity);
+    hotAirBalloon.position.y = 20 + Math.sin(elapsedTime * 0.35) * 1.4;
+
+    if (Math.abs(hotAirBalloon.position.x) > BALLOON_BOUNDS.x) {
+      hotAirBalloon.position.x = THREE.MathUtils.clamp(
+        hotAirBalloon.position.x,
+        -BALLOON_BOUNDS.x,
+        BALLOON_BOUNDS.x
+      );
+      balloonVelocity.x *= -1;
+    }
+
+    if (Math.abs(hotAirBalloon.position.z) > BALLOON_BOUNDS.z) {
+      hotAirBalloon.position.z = THREE.MathUtils.clamp(
+        hotAirBalloon.position.z,
+        -BALLOON_BOUNDS.z,
+        BALLOON_BOUNDS.z
+      );
+      balloonVelocity.z *= -1;
+    }
+
+    const headingDrift = noise3D(elapsedTime * 0.05, 0, 0) * 0.0004;
+    balloonVelocity.x += headingDrift;
+    balloonVelocity.z += noise3D(0, elapsedTime * 0.05, 0) * 0.0003;
+    balloonVelocity.x = THREE.MathUtils.clamp(balloonVelocity.x, -0.022, 0.022);
+    balloonVelocity.z = THREE.MathUtils.clamp(balloonVelocity.z, -0.01, 0.01);
+    hotAirBalloon.rotation.y += 0.0015;
+  }
 
   const nowMs = performance.now();
 

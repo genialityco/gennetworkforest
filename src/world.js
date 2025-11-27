@@ -1,14 +1,12 @@
 // world.js (o como lo tengas llamado)
 import * as THREE from "three";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { createNoise3D } from "simplex-noise";
-import {
-  doc,
-  onSnapshot,
-  collection,
-  query,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
 
 const treesCollection = collection(db, "trees");
@@ -17,6 +15,7 @@ const treeObjects = new Map(); // key: treeId, value: { trunk, canopy, flowers, 
 let scene,
   camera,
   renderer,
+  composer,
   clock,
   mixers = [],
   trees = [],
@@ -135,7 +134,6 @@ function listenToTrees() {
   );
 }
 
-
 /**
  * Solo para leer el contador global y mostrarlo en el overlay.
  * Ya NO crea árboles. Los árboles vienen de la colección `trees`.
@@ -179,11 +177,7 @@ function listenToSceneConfig() {
 
 // Árboles que han pedido ser vistos recientemente (para la tarima frontal)
 function listenToHighlightTrees() {
-  const q = query(
-    treesCollection,
-    orderBy("lastViewRequestAt", "desc"),
-    limit(10)
-  );
+  const q = query(treesCollection, orderBy("lastViewRequestAt", "desc"), limit(10));
 
   onSnapshot(
     q,
@@ -248,7 +242,6 @@ function listenToHighlightTrees() {
     }
   );
 }
-
 
 function createOverlayFrame() {
   const frameDiv = document.createElement("div");
@@ -337,12 +330,10 @@ function createStageInfoUI() {
     card.style.maxWidth = "220px";
     card.style.padding = "10px 12px 8px";
     card.style.borderRadius = "12px";
-    card.style.background =
-      "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
+    card.style.background = "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
     card.style.boxShadow = "0 12px 25px rgba(0,0,0,0.5)";
     card.style.color = "#ffffff";
-    card.style.fontFamily =
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    card.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     card.style.fontSize = "12px";
     card.style.opacity = "0";
     card.style.transform = "translate(-50%, 0)";
@@ -410,7 +401,6 @@ function updateTreesCounterUI() {
   el.innerText = String(totalTrees);
 }
 
-
 // -----------------------------------------------------------------------------
 // Init escena
 // -----------------------------------------------------------------------------
@@ -419,17 +409,14 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xcccccc);
 
-  camera = new THREE.PerspectiveCamera(
-    60,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    2000
-  );
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 10, 40);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
   document.body.appendChild(renderer.domElement);
 
   clock = new THREE.Clock();
@@ -475,6 +462,24 @@ function init() {
   winterAudio.loop = true;
   springAudio.loop = true;
 
+  // Setup post-processing with Bloom and color grading
+  composer = new EffectComposer(renderer);
+  
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+
+  // Add Bloom effect for visual enhancement
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.4,  // strength
+    0.4,  // radius
+    0.75  // threshold
+  );
+  composer.addPass(bloomPass);
+
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+  
   animate();
 }
 
@@ -624,7 +629,7 @@ function createButterflies() {
 
   for (let i = 0; i < butterflyCount; i++) {
     const bodyGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
-    const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7, metalness: 0.0 });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 
     const wingMaterial = new THREE.SpriteMaterial({
@@ -643,11 +648,7 @@ function createButterflies() {
 
     const butterfly = new THREE.Group();
     butterfly.add(body, leftWing, rightWing);
-    butterfly.position.set(
-      (Math.random() - 0.5) * 40,
-      5 + Math.random() * 5,
-      (Math.random() - 0.5) * 40
-    );
+    butterfly.position.set((Math.random() - 0.5) * 40, 5 + Math.random() * 5, (Math.random() - 0.5) * 40);
     butterfly.userData = {
       velocity: new THREE.Vector3(
         (Math.random() - 0.5) * 0.1,
@@ -689,6 +690,8 @@ function createBirds() {
       color: birdColors[i % birdColors.length],
       transparent: true,
       opacity: 0,
+      roughness: 0.7,
+      metalness: 0.0,
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 
@@ -699,6 +702,8 @@ function createBirds() {
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
+      roughness: 0.7,
+      metalness: 0.0,
     });
     const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
     leftWing.position.set(-0.3, 0, 0);
@@ -714,15 +719,19 @@ function createBirds() {
       color: birdColors[i % birdColors.length],
       transparent: true,
       opacity: 0,
+      roughness: 0.7,
+      metalness: 0.0,
     });
     const head = new THREE.Mesh(headGeometry, headMaterial);
     head.position.set(0, 0, 0.6);
 
     const beakGeometry = new THREE.ConeGeometry(0.1, 0.2, 8);
-    const beakMaterial = new THREE.MeshPhongMaterial({
+    const beakMaterial = new THREE.MeshStandardMaterial({
       color: 0xffa500,
       transparent: true,
       opacity: 0,
+      roughness: 0.7,
+      metalness: 0.0,
     });
     const beak = new THREE.Mesh(beakGeometry, beakMaterial);
     beak.position.set(0, 0, 0.8);
@@ -730,17 +739,9 @@ function createBirds() {
 
     const bird = new THREE.Group();
     bird.add(body, leftWing, rightWing, head, beak);
-    bird.position.set(
-      (Math.random() - 0.5) * 100,
-      15 + Math.random() * 10,
-      (Math.random() - 0.5) * 100
-    );
+    bird.position.set((Math.random() - 0.5) * 100, 15 + Math.random() * 10, (Math.random() - 0.5) * 100);
     bird.userData = {
-      velocity: new THREE.Vector3(
-        (Math.random() - 0.5) * 0.2,
-        0,
-        (Math.random() - 0.5) * 0.2
-      ),
+      velocity: new THREE.Vector3((Math.random() - 0.5) * 0.2, 0, (Math.random() - 0.5) * 0.2),
       flapPhase: Math.random() * Math.PI * 2,
       noiseOffset: Math.random() * 100,
     };
@@ -749,24 +750,25 @@ function createBirds() {
 }
 
 function createSky() {
-  const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-  const skyMaterial = new THREE.MeshBasicMaterial({
-    color: 0xadd8e6,
-    side: THREE.BackSide,
+  // Load HDR environment map (only once)
+  new RGBELoader().load("/src/hdr/partly_cloudy_puresky.hdr", (hdr) => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = hdr;
+    scene.background = hdr;
   });
-  sky = new THREE.Mesh(skyGeometry, skyMaterial);
-  scene.add(sky);
 }
 
 function createClouds() {
   clouds = new THREE.Group();
   scene.add(clouds);
 
-  const cloudMaterial = new THREE.MeshPhongMaterial({
+  const cloudMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     transparent: true,
     opacity: 0.8,
     side: THREE.DoubleSide,
+    roughness: 0.7,
+    metalness: 0.0,
   });
 
   const cloudCount = 10;
@@ -774,24 +776,12 @@ function createClouds() {
     const cloud = new THREE.Group();
     const puffCount = 3 + Math.floor(Math.random() * 3);
     for (let j = 0; j < puffCount; j++) {
-      const puffGeometry = new THREE.SphereGeometry(
-        1 + Math.random() * 0.5,
-        16,
-        16
-      );
+      const puffGeometry = new THREE.SphereGeometry(1 + Math.random() * 0.5, 16, 16);
       const puff = new THREE.Mesh(puffGeometry, cloudMaterial);
-      puff.position.set(
-        (Math.random() - 0.5) * 2,
-        (Math.random() - 0.5) * 1,
-        (Math.random() - 0.5) * 2
-      );
+      puff.position.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1, (Math.random() - 0.5) * 2);
       cloud.add(puff);
     }
-    cloud.position.set(
-      (Math.random() - 0.5) * 100,
-      20 + Math.random() * 5,
-      (Math.random() - 0.5) * 100
-    );
+    cloud.position.set((Math.random() - 0.5) * 100, 20 + Math.random() * 5, (Math.random() - 0.5) * 100);
     cloud.scale.set(2, 1, 2);
     clouds.add(cloud);
   }
@@ -809,10 +799,12 @@ function createTerrain() {
   }
   geometry.computeVertexNormals();
 
-  const material = new THREE.MeshPhongMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color: 0xddeeff,
     side: THREE.DoubleSide,
     flatShading: true,
+    roughness: 0.7,
+    metalness: 0.0,
   });
 
   terrain = new THREE.Mesh(geometry, material);
@@ -825,7 +817,7 @@ function createIceLayer() {
   const size = 50;
   const segments = 100;
   const iceGeometry = new THREE.PlaneGeometry(size, size, segments, segments);
-  const iceMaterial = new THREE.MeshPhongMaterial({
+  const iceMaterial = new THREE.MeshStandardMaterial({
     color: 0x88ccff,
     transparent: true,
     opacity: 0.7,
@@ -833,6 +825,8 @@ function createIceLayer() {
     flatShading: true,
     specular: 0xffffff,
     shininess: 100,
+    roughness: 0.7,
+    metalness: 0.0,
   });
 
   ice = new THREE.Mesh(iceGeometry, iceMaterial);
@@ -855,11 +849,7 @@ function createTree(x, z, height) {
   trees.push(treeData);
 
   const mixer = new THREE.AnimationMixer(treeGroup);
-  const growTrack = new THREE.KeyframeTrack(
-    ".scale",
-    [0, 5],
-    [0.1, 0.1, 0.1, 1, 1, 1]
-  );
+  const growTrack = new THREE.KeyframeTrack(".scale", [0, 5], [0.1, 0.1, 0.1, 1, 1, 1]);
   const growClip = new THREE.AnimationClip("grow", 5, [growTrack]);
   const growAction = mixer.clipAction(growClip);
   growAction.play();
@@ -870,7 +860,7 @@ function createTree(x, z, height) {
 
 function createTrunk(parent, height) {
   const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, height, 8);
-  const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8b5a2b });
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7, metalness: 0.0 });
   const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
   trunk.position.y = height / 2;
   parent.add(trunk);
@@ -881,23 +871,17 @@ function createLeafCanopy(parent, trunk) {
   const canopyGroup = new THREE.Group();
   parent.add(canopyGroup);
 
-  const canopyMaterial = new THREE.MeshPhongMaterial({
+  const canopyMaterial = new THREE.MeshStandardMaterial({
     color: 0xddeeff,
     flatShading: true,
+    roughness: 0.7,
+    metalness: 0.0,
   });
 
   for (let i = 0; i < 5; i++) {
-    const canopyGeometry = new THREE.SphereGeometry(
-      2.5 - i * 0.4 + Math.random() * 0.3,
-      8,
-      8
-    );
+    const canopyGeometry = new THREE.SphereGeometry(2.5 - i * 0.4 + Math.random() * 0.3, 8, 8);
     const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
-    canopy.position.set(
-      (Math.random() - 0.5) * 0.5,
-      trunk.position.y + 2 + i * 1.5,
-      (Math.random() - 0.5) * 0.5
-    );
+    canopy.position.set((Math.random() - 0.5) * 0.5, trunk.position.y + 2 + i * 1.5, (Math.random() - 0.5) * 0.5);
     canopyGroup.add(canopy);
   }
   return canopyGroup;
@@ -933,9 +917,11 @@ function createCherryFruit() {
 function createCherryBlossomFlower() {
   const flowerGroup = new THREE.Group();
 
-  const petalMaterial = new THREE.MeshPhongMaterial({
+  const petalMaterial = new THREE.MeshStandardMaterial({
     color: 0xffb6c1,
     side: THREE.DoubleSide,
+    roughness: 0.7,
+    metalness: 0.0,
   });
   const petalGeometry = new THREE.CircleGeometry(0.2, 16);
   for (let i = 0; i < 5; i++) {
@@ -948,7 +934,7 @@ function createCherryBlossomFlower() {
   }
 
   const centerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-  const centerMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+  const centerMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, roughness: 0.7, metalness: 0.0 });
   const center = new THREE.Mesh(centerGeometry, centerMaterial);
   flowerGroup.add(center);
 
@@ -1164,12 +1150,10 @@ function showTreeLabel(meta) {
     label.style.maxWidth = "420px";
     label.style.padding = "16px 20px";
     label.style.borderRadius = "18px";
-    label.style.background =
-      "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
+    label.style.background = "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
     label.style.boxShadow = "0 18px 40px rgba(0,0,0,0.55)";
     label.style.color = "#ffffff";
-    label.style.fontFamily =
-      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    label.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     label.style.zIndex = "200";
     label.style.backdropFilter = "blur(12px)";
     label.style.border = "1px solid rgba(255, 255, 255, 0.18)";
@@ -1253,18 +1237,7 @@ function animate() {
   }
 
   // Terrain color
-  terrain.material.color.lerpColors(
-    new THREE.Color(0xddeeff),
-    new THREE.Color(0x228b22),
-    progress
-  );
-
-  // Sky color
-  sky.material.color.lerpColors(
-    new THREE.Color(0xadd8e6),
-    new THREE.Color(0x87ceeb),
-    progress
-  );
+  terrain.material.color.lerpColors(new THREE.Color(0xddeeff), new THREE.Color(0x228b22), progress);
 
   // Clouds movement
   clouds.children.forEach((cloud) => {
@@ -1277,17 +1250,9 @@ function animate() {
     const growth = group.userData?.growth ?? 0;
     const localProgress = Math.max(0, Math.min(growth / 100, 1));
 
-    trunk.material.color.lerpColors(
-      new THREE.Color(0x8b5a2b),
-      new THREE.Color(0x8b5a2b),
-      progress
-    );
+    trunk.material.color.lerpColors(new THREE.Color(0x8b5a2b), new THREE.Color(0x8b5a2b), progress);
     canopy.children.forEach((leaf) => {
-      leaf.material.color.lerpColors(
-        new THREE.Color(0xddeeff),
-        new THREE.Color(0x228b22),
-        progress
-      );
+      leaf.material.color.lerpColors(new THREE.Color(0xddeeff), new THREE.Color(0x228b22), progress);
     });
 
     // Dentro de animate(), donde ajustas el scale según growth
@@ -1317,30 +1282,18 @@ function animate() {
         if (child.material) child.material.opacity = springProgress;
       });
 
-      const noiseX =
-        noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
-      const noiseY =
-        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) *
-        0.05;
-      const noiseZ =
-        noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
-      butterfly.position.add(
-        butterfly.userData.velocity
-          .clone()
-          .add(new THREE.Vector3(noiseX, noiseY, noiseZ))
-      );
+      const noiseX = noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
+      const noiseY = noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) * 0.05;
+      const noiseZ = noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
+      butterfly.position.add(butterfly.userData.velocity.clone().add(new THREE.Vector3(noiseX, noiseY, noiseZ)));
 
-      const flapAngle =
-        Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
+      const flapAngle = Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
       butterfly.children[1].rotation.z = flapAngle;
       butterfly.children[2].rotation.z = -flapAngle;
 
-      if (butterfly.position.x > 50 || butterfly.position.x < -50)
-        butterfly.userData.velocity.x *= -1;
-      if (butterfly.position.z > 50 || butterfly.position.z < -50)
-        butterfly.userData.velocity.z *= -1;
-      if (butterfly.position.y > 15 || butterfly.position.y < 5)
-        butterfly.userData.velocity.y *= -1;
+      if (butterfly.position.x > 50 || butterfly.position.x < -50) butterfly.userData.velocity.x *= -1;
+      if (butterfly.position.z > 50 || butterfly.position.z < -50) butterfly.userData.velocity.z *= -1;
+      if (butterfly.position.y > 15 || butterfly.position.y < 5) butterfly.userData.velocity.y *= -1;
     });
 
     // Birds
@@ -1349,26 +1302,73 @@ function animate() {
         if (child.material) child.material.opacity = springProgress;
       });
 
-      const noiseX =
-        noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
-      const noiseZ =
-        noise3D(0, 0, bird.userData.noiseOffset + elapsedTime * 0.05) * 0.2;
-      bird.position.add(
-        bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ))
-      );
+      const noiseX = noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
+      const noiseZ = noise3D(0, 0, bird.userData.noiseOffset + elapsedTime * 0.05) * 0.2;
+      bird.position.add(bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ)));
 
-      const flapAngle =
-        Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
+      const flapAngle = Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
       bird.children[1].rotation.z = flapAngle;
       bird.children[2].rotation.z = -flapAngle;
 
       const velocity = bird.userData.velocity.clone().normalize();
       bird.lookAt(bird.position.clone().add(velocity));
 
-      if (bird.position.x > 100 || bird.position.x < -100)
-        bird.userData.velocity.x *= -1;
-      if (bird.position.z > 100 || bird.position.z < -100)
-        bird.userData.velocity.z *= -1;
+      if (bird.position.x > 100 || bird.position.x < -100) bird.userData.velocity.x *= -1;
+      if (bird.position.z > 100 || bird.position.z < -100) bird.userData.velocity.z *= -1;
+    });
+    frogs?.children.forEach((frog) => {
+      // Fade-in suave en primavera
+      frog.material.opacity = Math.min(
+        1,
+        frog.material.opacity + delta * 0.5
+      );
+    
+      frog.userData.hopTimer += delta;
+    
+      // Cuando toca saltar
+      if (frog.userData.hopTimer > frog.userData.hopInterval) {
+        frog.userData.hopTimer = 0;
+    
+        // Movimiento horizontal
+        frog.position.x += frog.userData.velocity.x;
+        frog.position.z += frog.userData.velocity.z;
+    
+        // Rebote pequeño
+        frog.userData.jumpPhase = 0;
+      }
+    
+      // Animación de salto (parábola simple)
+      if (frog.userData.jumpPhase !== undefined) {
+        frog.userData.jumpPhase += delta * 6;
+        const jumpHeight = Math.sin(frog.userData.jumpPhase) * 0.6;
+        frog.position.y = frog.userData.baseY + Math.max(0, jumpHeight);
+    
+        if (frog.userData.jumpPhase >= Math.PI) {
+          frog.position.y = frog.userData.baseY;
+          frog.userData.jumpPhase = undefined;
+        }
+      }
+    
+      // Ruido suave para que no se muevan igual
+      const noiseX =
+        noise3D(frog.userData.noiseOffset, clock.elapsedTime * 0.2, 0) * 0.02;
+      const noiseZ =
+        noise3D(0, frog.userData.noiseOffset, clock.elapsedTime * 0.2) * 0.02;
+    
+      frog.position.x += noiseX;
+      frog.position.z += noiseZ;
+    
+      // Mirar hacia donde "salta"
+      frog.rotation.y = Math.atan2(
+        frog.userData.velocity.x,
+        frog.userData.velocity.z
+      );
+    
+      // Límites del terreno
+      if (frog.position.x > 48 || frog.position.x < -48)
+        frog.userData.velocity.x *= -1;
+      if (frog.position.z > 48 || frog.position.z < -48)
+        frog.userData.velocity.z *= -1;
     });
     frogs?.children.forEach((frog) => {
       // Fade-in suave en primavera
@@ -1455,7 +1455,7 @@ function animate() {
   // Actualizar posiciones de las cards de la tarima
   updateStageInfoUI();
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 // -----------------------------------------------------------------------------
@@ -1469,4 +1469,5 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  composer.setSize(window.innerWidth, window.innerHeight);
 });

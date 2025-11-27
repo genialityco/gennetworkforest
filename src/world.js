@@ -7,7 +7,14 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { ImprovedNoise } from "three/examples/jsm/math/ImprovedNoise.js";
 import { createNoise3D } from "simplex-noise";
-import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  collection,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
 
 const treesCollection = collection(db, "trees");
@@ -106,11 +113,15 @@ const GROWTH_STAGES = [
   },
 ];
 
-const STAGE_BY_ID = Object.fromEntries(GROWTH_STAGES.map((stage) => [stage.id, stage]));
+const STAGE_BY_ID = Object.fromEntries(
+  GROWTH_STAGES.map((stage) => [stage.id, stage])
+);
 
 function getGrowthStage(growth) {
   const safeGrowth = Math.max(0, Math.min(100, growth ?? 0));
-  const stage = GROWTH_STAGES.find((entry) => safeGrowth >= entry.min && safeGrowth < entry.max);
+  const stage = GROWTH_STAGES.find(
+    (entry) => safeGrowth >= entry.min && safeGrowth < entry.max
+  );
   return stage ? stage.id : "ADULT";
 }
 
@@ -154,7 +165,12 @@ function spawnAuraWave(treeGroup, color, scaleMultiplier = 1, duration = 800) {
   animateAura();
 }
 
-function spawnParticleBurst(origin, color, baseCount = 12, speedMultiplier = 1) {
+function spawnParticleBurst(
+  origin,
+  color,
+  baseCount = 12,
+  speedMultiplier = 1
+) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -226,7 +242,10 @@ function spawnSmokePuff(origin, color, scaleMultiplier = 1) {
   scene.add(group);
 
   for (let i = 0; i < 4; i++) {
-    const geometry = new THREE.IcosahedronGeometry(0.6 * scaleMultiplier + i * 0.2, 1);
+    const geometry = new THREE.IcosahedronGeometry(
+      0.6 * scaleMultiplier + i * 0.2,
+      1
+    );
     const material = new THREE.MeshStandardMaterial({
       color,
       transparent: true,
@@ -270,7 +289,11 @@ function spawnSmokePuff(origin, color, scaleMultiplier = 1) {
 }
 
 function spawnGlowPulse(treeGroup, color, scaleMultiplier = 1, duration = 900) {
-  const geometry = new THREE.RingGeometry(0.6 * scaleMultiplier, 1.1 * scaleMultiplier, 24);
+  const geometry = new THREE.RingGeometry(
+    0.6 * scaleMultiplier,
+    1.1 * scaleMultiplier,
+    24
+  );
   const material = new THREE.MeshBasicMaterial({
     color,
     transparent: true,
@@ -331,16 +354,16 @@ const MAIN_STAGE_SLOT_INDEX = 5;
 // Todos con el mismo z (más o menos al frente de la cámara)
 // y x repartidos simétricamente
 const stagePositions = [
-  { x: -32, z: 23 },
-  { x: -29, z: 14 },
-  { x: -16, z: 24 },
-  { x: -12, z: 14 },
-  { x: -4.5, z: 25 },
-  { x: 4.5, z: 25 },
-  { x: 12, z: 14 },
-  { x: 16, z: 24 },
-  { x: 29, z: 14 },
-  { x: 32, z: 23 },
+  { x: -30, z: 23 },
+  { x: -28, z: 10 },
+  { x: -16, z: 25 },
+  { x: -12, z: 10 },
+  { x: -4.5, z: 27 },
+  { x: 4.5, z: 27 },
+  { x: 12, z: 10 },
+  { x: 16, z: 25 },
+  { x: 28, z: 10 },
+  { x: 30, z: 23 },
 ];
 
 // -----------------------------------------------------------------------------
@@ -469,7 +492,11 @@ function listenToSceneConfig() {
 
 // Árboles que han pedido ser vistos recientemente (para la tarima frontal)
 function listenToHighlightTrees() {
-  const q = query(treesCollection, orderBy("lastViewRequestAt", "desc"), limit(10));
+  const q = query(
+    treesCollection,
+    orderBy("lastViewRequestAt", "desc"),
+    limit(10)
+  );
 
   onSnapshot(
     q,
@@ -540,10 +567,7 @@ function listenToHighlightTrees() {
         const treeId = docIds[idx];
 
         // Buscar el siguiente slot libre
-        while (
-          slotCursor < STAGE_SLOTS &&
-          stageSlots[slotCursor] !== null
-        ) {
+        while (slotCursor < STAGE_SLOTS && stageSlots[slotCursor] !== null) {
           slotCursor++;
         }
         if (slotCursor >= STAGE_SLOTS) break;
@@ -658,10 +682,12 @@ function createStageInfoUI() {
     card.style.maxWidth = "220px";
     card.style.padding = "10px 12px 8px";
     card.style.borderRadius = "12px";
-    card.style.background = "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
+    card.style.background =
+      "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
     card.style.boxShadow = "0 12px 25px rgba(0,0,0,0.5)";
     card.style.color = "#ffffff";
-    card.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    card.style.fontFamily =
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     card.style.fontSize = "12px";
     card.style.opacity = "0";
     card.style.transform = "translate(-50%, 0)";
@@ -669,8 +695,8 @@ function createStageInfoUI() {
     card.style.pointerEvents = "none";
     card.style.overflow = "visible";
     card.style.textAlign = "left";
-    card.style.transition = "opacity 0.25s ease-out, transform 0.25s ease-out, box-shadow 0.25s ease-out";
-
+    card.style.transition =
+      "opacity 0.25s ease-out, transform 0.25s ease-out, box-shadow 0.25s ease-out";
 
     card.innerHTML = `
       <!-- Pointer que apunta al árbol -->
@@ -786,8 +812,17 @@ function highlightPrimaryStageCard(treeId) {
       badge.style.opacity = "0";
     }
   }, 4000); // 4 segundos de "nuevo destacado"
-}
 
+  // --- NUEVO: ACTIVAR EFECTO 3D EN EL ÁRBOL ---
+  // Buscamos el objeto 3D usando el ID
+  if (treeObjects.has(treeId)) {
+    const treeObj = treeObjects.get(treeId);
+    if (treeObj && treeObj.group) {
+      // Lanzamos el haz de luz y el brillo
+      spawnHighlightBeam(treeObj.group);
+    }
+  }
+}
 
 function updateTreesCounterUI() {
   const el = document.getElementById("treesValue");
@@ -800,19 +835,19 @@ function updateTreesCounterUI() {
 
 function createLogoUI() {
   const logoContainer = document.createElement("div");
-  
+
   // Estilos de posición
   logoContainer.style.position = "absolute";
-  logoContainer.style.top = "20px";   // Un poco de margen superior
-  logoContainer.style.left = "20px";  // Lado IZQUIERDO (el espacio vacío)
-  
+  logoContainer.style.top = "20px"; // Un poco de margen superior
+  logoContainer.style.left = "20px"; // Lado IZQUIERDO (el espacio vacío)
+
   // Ajusta este ancho según el tamaño real de tu logo
-  logoContainer.style.width = "200px"; 
+  logoContainer.style.width = "200px";
   logoContainer.style.height = "auto";
-  
+
   // Z-Index alto para estar encima del canvas y del marco
-  logoContainer.style.zIndex = "25"; 
-  
+  logoContainer.style.zIndex = "25";
+
   // Ignorar clics para no bloquear la interacción 3D
   logoContainer.style.pointerEvents = "none";
 
@@ -828,6 +863,122 @@ function createLogoUI() {
 }
 
 // -----------------------------------------------------------------------------
+// ✨ Nuevo efecto: Highlight Beam (Haz de luz para destacados)
+// -----------------------------------------------------------------------------
+function spawnHighlightBeam(treeGroup) {
+  // 1. El Haz de Luz (Cilindro alto y transparente)
+  const beamHeight = 40;
+  const beamGeometry = new THREE.CylinderGeometry(
+    0.5,
+    4,
+    beamHeight,
+    32,
+    1,
+    true
+  );
+  // Usamos AdditiveBlending para que parezca luz pura
+  const beamMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd700, // Dorado
+    transparent: true,
+    opacity: 0,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false, // Importante para que no oculte cosas detrás
+  });
+
+  const beam = new THREE.Mesh(beamGeometry, beamMaterial);
+  beam.position.y = beamHeight / 2; // Para que empiece desde el suelo hacia arriba
+  treeGroup.add(beam);
+
+  // 2. Partículas ascendentes (Brillitos subiendo)
+  const particleGroup = new THREE.Group();
+  treeGroup.add(particleGroup);
+  const particles = [];
+  const particleCount = 20;
+
+  for (let i = 0; i < particleCount; i++) {
+    const pGeo = new THREE.PlaneGeometry(0.5, 0.5);
+    const pMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const p = new THREE.Mesh(pGeo, pMat);
+    p.position.set(
+      (Math.random() - 0.5) * 3,
+      Math.random() * 10,
+      (Math.random() - 0.5) * 3
+    );
+    p.userData = { speed: 0.1 + Math.random() * 0.2 };
+    particleGroup.add(p);
+    particles.push(p);
+  }
+
+  // 3. Animación
+  const start = performance.now();
+  const duration = 4000; // 4 segundos (igual que la card)
+
+  // Guardar materiales originales para el pulso del árbol
+  const meshesToPulse = [];
+  treeGroup.traverse((child) => {
+    if (child.isMesh && child.material && child.material.emissive) {
+      meshesToPulse.push({
+        mesh: child,
+        originalEmissiveIntensity: child.material.emissiveIntensity || 0,
+      });
+    }
+  });
+
+  const animateBeam = () => {
+    const elapsed = performance.now() - start;
+    const t = Math.min(elapsed / duration, 1);
+
+    if (t >= 1) {
+      // Limpieza
+      treeGroup.remove(beam);
+      treeGroup.remove(particleGroup);
+
+      // Restaurar intensidad original del árbol
+      meshesToPulse.forEach((item) => {
+        item.mesh.material.emissiveIntensity = item.originalEmissiveIntensity;
+      });
+      return;
+    }
+
+    // Curva de opacidad: Entra rápido, se mantiene y sale suave
+    // Sin(t * PI) crea una curva de campana (0 -> 1 -> 0)
+    const opacityCurve = Math.sin(t * Math.PI);
+
+    // Animar haz de luz
+    beam.material.opacity = 0.4 * opacityCurve;
+    beam.rotation.y += 0.02; // Girar suavemente
+
+    // Animar partículas
+    particles.forEach((p) => {
+      p.position.y += p.userData.speed;
+      p.rotation.z += 0.1;
+      p.material.opacity = opacityCurve;
+      if (p.position.y > 15) p.position.y = 0; // Reiniciar si suben mucho
+      p.lookAt(camera.position); // Billboard
+    });
+
+    // Animar pulso del árbol (Emissive boost)
+    // Aumentamos la intensidad emisiva para que brille con el Bloom
+    meshesToPulse.forEach((item) => {
+      // Base + extra por el highlight
+      item.mesh.material.emissiveIntensity =
+        item.originalEmissiveIntensity + 0.8 * opacityCurve;
+      // Opcional: forzar un color emisivo dorado si el original es muy oscuro
+      // item.mesh.material.emissive.setHex(0xffaa00);
+    });
+
+    requestAnimationFrame(animateBeam);
+  };
+
+  animateBeam();
+}
+
+// -----------------------------------------------------------------------------
 // Init escena
 // -----------------------------------------------------------------------------
 
@@ -835,7 +986,12 @@ function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xcccccc);
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+  camera = new THREE.PerspectiveCamera(
+    60,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    2000
+  );
   camera.position.set(0, 16, 55);
   camera.lookAt(0, 0, 0);
 
@@ -866,7 +1022,6 @@ function init() {
   createButterflies();
   createBirds();
   createFrogs();
- 
 
   // Marco
   createOverlayFrame();
@@ -892,22 +1047,22 @@ function init() {
 
   // Setup post-processing with Bloom and color grading
   composer = new EffectComposer(renderer);
-  
+
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
 
   // Add Bloom effect for visual enhancement
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.4,  // strength
-    0.4,  // radius
-    0.75  // threshold
+    0.4, // strength
+    0.4, // radius
+    0.75 // threshold
   );
   composer.addPass(bloomPass);
 
   const outputPass = new OutputPass();
   composer.addPass(outputPass);
-  
+
   animate();
 }
 
@@ -940,14 +1095,14 @@ function addAudioStartButton() {
 function createSun() {
   // Geometría del sol con más segmentos para suavidad
   const sunGeometry = new THREE.SphereGeometry(2, 64, 64);
-  
+
   // Material con emisión para que brille
-  const sunMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0xfff4e6,  // Amarillo más natural
+  const sunMaterial = new THREE.MeshBasicMaterial({
+    color: 0xfff4e6, // Amarillo más natural
     emissive: 0xffd700,
-    emissiveIntensity: 1
+    emissiveIntensity: 1,
   });
-  
+
   sun = new THREE.Mesh(sunGeometry, sunMaterial);
   sun.position.set(30, 30, -50);
   sun.visible = false;
@@ -959,7 +1114,7 @@ function createSun() {
     color: 0xffaa00,
     transparent: true,
     opacity: 0.3,
-    side: THREE.BackSide
+    side: THREE.BackSide,
   });
   const sunGlow = new THREE.Mesh(glowGeometry, glowMaterial);
   sun.add(sunGlow);
@@ -970,7 +1125,7 @@ function createSun() {
     color: 0xffdd88,
     transparent: true,
     opacity: 0.15,
-    side: THREE.BackSide
+    side: THREE.BackSide,
   });
   const sunGlow2 = new THREE.Mesh(glow2Geometry, glow2Material);
   sun.add(sunGlow2);
@@ -979,13 +1134,13 @@ function createSun() {
   sunlight = new THREE.DirectionalLight(0xfff4e6, 1.5);
   sunlight.position.copy(sun.position);
   sunlight.castShadow = true;
-  
+
   // Configuración de sombras (opcional)
   sunlight.shadow.mapSize.width = 2048;
   sunlight.shadow.mapSize.height = 2048;
   sunlight.shadow.camera.near = 0.5;
   sunlight.shadow.camera.far = 500;
-  
+
   scene.add(sunlight);
 
   // Luz ambiental suave para simular la dispersión atmosférica
@@ -1051,13 +1206,15 @@ function createButterflies() {
   const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
 
   const textureLoader = new THREE.TextureLoader();
-  const butterflyTexture = textureLoader.load(
-    "/imagenes/mariposa.png"
-  );
+  const butterflyTexture = textureLoader.load("/imagenes/mariposa.png");
 
   for (let i = 0; i < butterflyCount; i++) {
     const bodyGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7, metalness: 0.0 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0x333333,
+      roughness: 0.7,
+      metalness: 0.0,
+    });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 
     const wingMaterial = new THREE.SpriteMaterial({
@@ -1076,7 +1233,11 @@ function createButterflies() {
 
     const butterfly = new THREE.Group();
     butterfly.add(body, leftWing, rightWing);
-    butterfly.position.set((Math.random() - 0.5) * 40, 5 + Math.random() * 5, (Math.random() - 0.5) * 40);
+    butterfly.position.set(
+      (Math.random() - 0.5) * 40,
+      5 + Math.random() * 5,
+      (Math.random() - 0.5) * 40
+    );
     butterfly.userData = {
       velocity: new THREE.Vector3(
         (Math.random() - 0.5) * 0.1,
@@ -1105,9 +1266,7 @@ function createBirds() {
 
   // Cargar textura para las alas
   const textureLoader = new THREE.TextureLoader();
-  const wingTexture = textureLoader.load(
-    '/imagenes/bird.png'
-  );
+  const wingTexture = textureLoader.load("/imagenes/bird.png");
 
   const birdCount = 5;
   for (let i = 0; i < birdCount; i++) {
@@ -1167,9 +1326,17 @@ function createBirds() {
 
     const bird = new THREE.Group();
     bird.add(body, leftWing, rightWing, head, beak);
-    bird.position.set((Math.random() - 0.5) * 100, 15 + Math.random() * 10, (Math.random() - 0.5) * 100);
+    bird.position.set(
+      (Math.random() - 0.5) * 100,
+      15 + Math.random() * 10,
+      (Math.random() - 0.5) * 100
+    );
     bird.userData = {
-      velocity: new THREE.Vector3((Math.random() - 0.5) * 0.2, 0, (Math.random() - 0.5) * 0.2),
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.2,
+        0,
+        (Math.random() - 0.5) * 0.2
+      ),
       flapPhase: Math.random() * Math.PI * 2,
       noiseOffset: Math.random() * 100,
     };
@@ -1204,17 +1371,28 @@ function createClouds() {
     const cloud = new THREE.Group();
     const puffCount = 3 + Math.floor(Math.random() * 3);
     for (let j = 0; j < puffCount; j++) {
-      const puffGeometry = new THREE.SphereGeometry(1 + Math.random() * 0.5, 16, 16);
+      const puffGeometry = new THREE.SphereGeometry(
+        1 + Math.random() * 0.5,
+        16,
+        16
+      );
       const puff = new THREE.Mesh(puffGeometry, cloudMaterial);
-      puff.position.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1, (Math.random() - 0.5) * 2);
+      puff.position.set(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 1,
+        (Math.random() - 0.5) * 2
+      );
       cloud.add(puff);
     }
-    cloud.position.set((Math.random() - 0.5) * 100, 20 + Math.random() * 5, (Math.random() - 0.5) * 100);
+    cloud.position.set(
+      (Math.random() - 0.5) * 100,
+      20 + Math.random() * 5,
+      (Math.random() - 0.5) * 100
+    );
     cloud.scale.set(2, 1, 2);
     clouds.add(cloud);
   }
 }
-
 
 function createTerrain() {
   const size = 100;
@@ -1223,27 +1401,27 @@ function createTerrain() {
 
   const vertices = geometry.attributes.position.array;
   const noise = new ImprovedNoise();
-  
+
   // Apply Perlin noise for natural terrain elevation
   for (let i = 0; i < vertices.length; i += 3) {
     const x = vertices[i];
     const y = vertices[i + 1];
-    
+
     // Multi-octave noise for more natural terrain
     let elevation = 0;
-    elevation += noise.noise(x * 0.1, y * 0.1, 0) * 3.0;      // Large features
-    elevation += noise.noise(x * 0.2, y * 0.2, 1) * 1.5;      // Medium features
-    elevation += noise.noise(x * 0.4, y * 0.4, 2) * 0.5;      // Small details
-    
+    elevation += noise.noise(x * 0.1, y * 0.1, 0) * 3.0; // Large features
+    elevation += noise.noise(x * 0.2, y * 0.2, 1) * 1.5; // Medium features
+    elevation += noise.noise(x * 0.4, y * 0.4, 2) * 0.5; // Small details
+
     vertices[i + 2] = elevation;
   }
-  
+
   geometry.computeVertexNormals();
 
   const material = new THREE.MeshStandardMaterial({
-    color: 0x6ac46a,  // Natural grass green
+    color: 0x6ac46a, // Natural grass green
     side: THREE.DoubleSide,
-    flatShading: false,  // Smooth shading for natural look
+    flatShading: false, // Smooth shading for natural look
     roughness: 1.0,
     metalness: 0.0,
   });
@@ -1281,7 +1459,7 @@ function createTree(x, z, height) {
   const treeGroup = new THREE.Group();
   treeGroup.position.set(x, 0, z);
   treeGroup.scale.set(0.1, 0.1, 0.1);
-  
+
   scene.add(treeGroup);
 
   const initialStage = "GERMINATION";
@@ -1364,13 +1542,19 @@ function createStageVisual(stageId, baseHeight) {
 
   switch (stageId) {
     case "GERMINATION": {
-      const seed = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), leafMaterial.clone());
+      const seed = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.6, 0),
+        leafMaterial.clone()
+      );
       seed.position.y = 0.4;
       seed.castShadow = true;
       seed.receiveShadow = true;
       stageGroup.add(seed);
 
-      trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, stageHeight * 0.6, 6), trunkMaterial.clone());
+      trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.12, 0.12, stageHeight * 0.6, 6),
+        trunkMaterial.clone()
+      );
       trunk.position.y = stageHeight * 0.6;
       trunk.castShadow = true;
       trunk.receiveShadow = true;
@@ -1385,34 +1569,60 @@ function createStageVisual(stageId, baseHeight) {
       break;
     }
     case "BABY": {
-      trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, stageHeight, 6), trunkMaterial.clone());
+      trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.22, stageHeight, 6),
+        trunkMaterial.clone()
+      );
       trunk.position.y = stageHeight * 0.5;
       trunk.castShadow = true;
       trunk.receiveShadow = true;
       stageGroup.add(trunk);
 
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(stageHeight * 0.35, 8, 6), leafMaterial.clone());
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(stageHeight * 0.35, 8, 6),
+        leafMaterial.clone()
+      );
       bulb.position.y = stageHeight * 0.95;
       bulb.castShadow = true;
       bulb.receiveShadow = true;
       stageGroup.add(bulb);
       leaves.push(bulb);
 
-      const leafGeo = new THREE.ConeGeometry(stageHeight * 0.18, stageHeight * 0.7, 5);
-      addLeaf(leafGeo, new THREE.Vector3(stageHeight * 0.25, stageHeight * 1.15, 0));
-      addLeaf(leafGeo, new THREE.Vector3(-stageHeight * 0.25, stageHeight * 1.15, 0));
-      leaves.slice(-2).forEach((leaf, idx) => (leaf.rotation.z = idx === 0 ? -0.8 : 0.8));
+      const leafGeo = new THREE.ConeGeometry(
+        stageHeight * 0.18,
+        stageHeight * 0.7,
+        5
+      );
+      addLeaf(
+        leafGeo,
+        new THREE.Vector3(stageHeight * 0.25, stageHeight * 1.15, 0)
+      );
+      addLeaf(
+        leafGeo,
+        new THREE.Vector3(-stageHeight * 0.25, stageHeight * 1.15, 0)
+      );
+      leaves
+        .slice(-2)
+        .forEach((leaf, idx) => (leaf.rotation.z = idx === 0 ? -0.8 : 0.8));
 
       break;
     }
     case "CHILD": {
-      trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, stageHeight, 6), trunkMaterial.clone());
+      trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.32, stageHeight, 6),
+        trunkMaterial.clone()
+      );
       trunk.position.y = stageHeight * 0.5;
       trunk.castShadow = true;
       trunk.receiveShadow = true;
       stageGroup.add(trunk);
 
-      const branchGeometry = new THREE.CylinderGeometry(0.08, 0.1, stageHeight * 0.6, 5);
+      const branchGeometry = new THREE.CylinderGeometry(
+        0.08,
+        0.1,
+        stageHeight * 0.6,
+        5
+      );
       const leftBranch = new THREE.Mesh(branchGeometry, trunkMaterial.clone());
       leftBranch.position.set(-0.35, stageHeight * 0.8, 0);
       leftBranch.rotation.z = 0.5;
@@ -1426,25 +1636,46 @@ function createStageVisual(stageId, baseHeight) {
 
       const canopyGeo = new THREE.SphereGeometry(stageHeight * 0.45, 10, 8);
       addLeaf(canopyGeo, new THREE.Vector3(0, stageHeight * 1.35, 0));
-      addLeaf(canopyGeo.clone(), new THREE.Vector3(-0.5, stageHeight * 1.2, -0.3));
-      addLeaf(canopyGeo.clone(), new THREE.Vector3(0.5, stageHeight * 1.2, 0.3));
+      addLeaf(
+        canopyGeo.clone(),
+        new THREE.Vector3(-0.5, stageHeight * 1.2, -0.3)
+      );
+      addLeaf(
+        canopyGeo.clone(),
+        new THREE.Vector3(0.5, stageHeight * 1.2, 0.3)
+      );
 
-      addAccent(new THREE.ConeGeometry(0.16, 0.5, 4), new THREE.Vector3(0, stageHeight * 1.6, 0));
+      addAccent(
+        new THREE.ConeGeometry(0.16, 0.5, 4),
+        new THREE.Vector3(0, stageHeight * 1.6, 0)
+      );
 
       break;
     }
     case "YOUNG_ADULT": {
-      trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.4, stageHeight, 8), trunkMaterial.clone());
+      trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.4, stageHeight, 8),
+        trunkMaterial.clone()
+      );
       trunk.position.y = stageHeight * 0.5;
       trunk.castShadow = true;
       trunk.receiveShadow = true;
       stageGroup.add(trunk);
 
-      const branchGeometry = new THREE.CylinderGeometry(0.1, 0.12, stageHeight * 0.7, 6);
+      const branchGeometry = new THREE.CylinderGeometry(
+        0.1,
+        0.12,
+        stageHeight * 0.7,
+        6
+      );
       const branchAngles = [0.35, -0.35, 0.6, -0.6];
       branchAngles.forEach((angle, idx) => {
         const branch = new THREE.Mesh(branchGeometry, trunkMaterial.clone());
-        branch.position.set(idx % 2 === 0 ? -0.5 : 0.5, stageHeight * 0.9, idx < 2 ? 0.4 : -0.4);
+        branch.position.set(
+          idx % 2 === 0 ? -0.5 : 0.5,
+          stageHeight * 0.9,
+          idx < 2 ? 0.4 : -0.4
+        );
         branch.rotation.z = angle;
         branch.castShadow = true;
         stageGroup.add(branch);
@@ -1452,24 +1683,43 @@ function createStageVisual(stageId, baseHeight) {
 
       const primaryCanopy = new THREE.SphereGeometry(stageHeight * 0.55, 10, 8);
       addLeaf(primaryCanopy, new THREE.Vector3(0, stageHeight * 1.5, 0));
-      addLeaf(primaryCanopy.clone(), new THREE.Vector3(-0.7, stageHeight * 1.3, -0.4));
-      addLeaf(primaryCanopy.clone(), new THREE.Vector3(0.7, stageHeight * 1.3, 0.4));
-      addLeaf(primaryCanopy.clone(), new THREE.Vector3(0, stageHeight * 1.2, 0.7));
+      addLeaf(
+        primaryCanopy.clone(),
+        new THREE.Vector3(-0.7, stageHeight * 1.3, -0.4)
+      );
+      addLeaf(
+        primaryCanopy.clone(),
+        new THREE.Vector3(0.7, stageHeight * 1.3, 0.4)
+      );
+      addLeaf(
+        primaryCanopy.clone(),
+        new THREE.Vector3(0, stageHeight * 1.2, 0.7)
+      );
 
-      addAccent(new THREE.OctahedronGeometry(0.25, 0), new THREE.Vector3(0, stageHeight * 1.8, 0));
+      addAccent(
+        new THREE.OctahedronGeometry(0.25, 0),
+        new THREE.Vector3(0, stageHeight * 1.8, 0)
+      );
 
       break;
     }
     case "ADULT":
     default: {
       const adultHeight = Math.max(stageHeight, baseHeight * 0.95);
-      trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.55, adultHeight, 10), trunkMaterial.clone());
+      trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.32, 0.55, adultHeight, 10),
+        trunkMaterial.clone()
+      );
       trunk.position.y = adultHeight * 0.5;
       trunk.castShadow = true;
       trunk.receiveShadow = true;
       stageGroup.add(trunk);
 
-      const canopyGeometry = new THREE.SphereGeometry(adultHeight * 0.6, 12, 10);
+      const canopyGeometry = new THREE.SphereGeometry(
+        adultHeight * 0.6,
+        12,
+        10
+      );
       const canopyPositions = [
         new THREE.Vector3(0, adultHeight * 1.6, 0),
         new THREE.Vector3(-0.9, adultHeight * 1.4, -0.4),
@@ -1544,11 +1794,23 @@ function applyGrowthAnimation(treeData, timestampMs) {
   const animation = state.animation;
   if (!animation) {
     const targetScale = getScaleForGrowth(treeData.group.userData.growth ?? 0);
-    const smoothScale = THREE.MathUtils.lerp(treeData.group.scale.x || targetScale, targetScale, 0.08);
+    const smoothScale = THREE.MathUtils.lerp(
+      treeData.group.scale.x || targetScale,
+      targetScale,
+      0.08
+    );
     treeData.group.scale.setScalar(smoothScale);
     if (treeData.stageVisual) {
-      treeData.stageVisual.rotation.z = THREE.MathUtils.lerp(treeData.stageVisual.rotation.z, 0, 0.12);
-      treeData.stageVisual.rotation.x = THREE.MathUtils.lerp(treeData.stageVisual.rotation.x, 0, 0.12);
+      treeData.stageVisual.rotation.z = THREE.MathUtils.lerp(
+        treeData.stageVisual.rotation.z,
+        0,
+        0.12
+      );
+      treeData.stageVisual.rotation.x = THREE.MathUtils.lerp(
+        treeData.stageVisual.rotation.x,
+        0,
+        0.12
+      );
     }
     return;
   }
@@ -1562,27 +1824,47 @@ function applyGrowthAnimation(treeData, timestampMs) {
   if (t < 0.35) {
     const stretchT = t / 0.35;
     const easeOut = 1 - Math.pow(1 - stretchT, 3);
-    scaleValue = THREE.MathUtils.lerp(animation.initialScale, animation.overshootScale, easeOut);
+    scaleValue = THREE.MathUtils.lerp(
+      animation.initialScale,
+      animation.overshootScale,
+      easeOut
+    );
     if (stageVisual) {
-      const wobble = Math.sin(stretchT * Math.PI * 3) * animation.wobbleStrength;
+      const wobble =
+        Math.sin(stretchT * Math.PI * 3) * animation.wobbleStrength;
       stageVisual.rotation.z = wobble;
     }
   } else if (t < 0.7) {
     const waveT = (t - 0.35) / 0.35;
     const damping = 1 - waveT;
-    const oscillation = Math.sin(waveT * Math.PI * 6) * animation.waveIntensity * damping;
+    const oscillation =
+      Math.sin(waveT * Math.PI * 6) * animation.waveIntensity * damping;
     scaleValue = animation.finalScale + oscillation;
     if (stageVisual) {
-      stageVisual.rotation.z = Math.sin(waveT * Math.PI * 5) * animation.waveIntensity * 2 * damping;
-      stageVisual.rotation.x = Math.cos(waveT * Math.PI * 4) * animation.waveIntensity * damping * 0.5;
+      stageVisual.rotation.z =
+        Math.sin(waveT * Math.PI * 5) * animation.waveIntensity * 2 * damping;
+      stageVisual.rotation.x =
+        Math.cos(waveT * Math.PI * 4) * animation.waveIntensity * damping * 0.5;
     }
   } else {
     const settleT = (t - 0.7) / 0.3;
     const ease = 1 - Math.pow(1 - settleT, 4);
-    scaleValue = THREE.MathUtils.lerp(animation.overshootScale, animation.finalScale, ease);
+    scaleValue = THREE.MathUtils.lerp(
+      animation.overshootScale,
+      animation.finalScale,
+      ease
+    );
     if (stageVisual) {
-      stageVisual.rotation.z = THREE.MathUtils.lerp(stageVisual.rotation.z, 0, 0.2);
-      stageVisual.rotation.x = THREE.MathUtils.lerp(stageVisual.rotation.x, 0, 0.2);
+      stageVisual.rotation.z = THREE.MathUtils.lerp(
+        stageVisual.rotation.z,
+        0,
+        0.2
+      );
+      stageVisual.rotation.x = THREE.MathUtils.lerp(
+        stageVisual.rotation.x,
+        0,
+        0.2
+      );
     }
   }
 
@@ -1631,7 +1913,11 @@ function triggerStageEvolution(treeData, nextStage, currentGrowth) {
 
 function createTrunk(parent, height) {
   const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, height, 8);
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7, metalness: 0.0 });
+  const trunkMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8b5a2b,
+    roughness: 0.7,
+    metalness: 0.0,
+  });
   const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
   trunk.position.y = height / 2;
   parent.add(trunk);
@@ -1646,8 +1932,12 @@ function createLeafCanopy(parent, trunk) {
   const timeUniform = { value: 0 };
 
   for (let i = 0; i < 5; i++) {
-    const canopyGeometry = new THREE.SphereGeometry(2.5 - i * 0.4 + Math.random() * 0.3, 8, 8);
-    
+    const canopyGeometry = new THREE.SphereGeometry(
+      2.5 - i * 0.4 + Math.random() * 0.3,
+      8,
+      8
+    );
+
     const canopyMaterial = new THREE.MeshStandardMaterial({
       color: 0xddeeff,
       flatShading: true,
@@ -1657,45 +1947,53 @@ function createLeafCanopy(parent, trunk) {
 
     // Store time uniform reference
     canopyMaterial.userData.time = timeUniform;
-    
+
     // Add wind animation shader
     canopyMaterial.onBeforeCompile = (shader) => {
       // Add time uniform
       shader.uniforms.time = timeUniform;
-      
+
       // Inject uniform declaration and varying
       shader.vertexShader = `
         uniform float time;
         ${shader.vertexShader}
       `;
-      
+
       // Replace the transform code to add wind effect
       shader.vertexShader = shader.vertexShader.replace(
-        '#include <begin_vertex>',
+        "#include <begin_vertex>",
         `
         #include <begin_vertex>
         
         // Wind sway effect - more movement at the top
         float windStrength = (position.y + 3.0) / 6.0;
-        transformed.x += sin(time * 1.5 + position.y * 0.5 + ${Math.random() * 6.28}) * windStrength * 0.15;
-        transformed.z += cos(time * 1.2 + position.x * 0.3 + ${Math.random() * 6.28}) * windStrength * 0.1;
+        transformed.x += sin(time * 1.5 + position.y * 0.5 + ${
+          Math.random() * 6.28
+        }) * windStrength * 0.15;
+        transformed.z += cos(time * 1.2 + position.x * 0.3 + ${
+          Math.random() * 6.28
+        }) * windStrength * 0.1;
         `
       );
-      
+
       // Mark that we need to update uniforms
       shader.uniforms.time = timeUniform;
     };
-    
-    canopyMaterial.customProgramCacheKey = () => 'wind-shader';
-    
+
+    canopyMaterial.customProgramCacheKey = () => "wind-shader";
+
     const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
-    canopy.position.set((Math.random() - 0.5) * 0.5, trunk.position.y + 2 + i * 1.5, (Math.random() - 0.5) * 0.5);
+    canopy.position.set(
+      (Math.random() - 0.5) * 0.5,
+      trunk.position.y + 2 + i * 1.5,
+      (Math.random() - 0.5) * 0.5
+    );
     canopyGroup.add(canopy);
   }
-  
+
   // Store time uniform on the group for easy access
   canopyGroup.userData.timeUniform = timeUniform;
-  
+
   return canopyGroup;
 }
 
@@ -1707,7 +2005,7 @@ function createCherryFruit() {
   const cherryMaterial = new THREE.MeshPhongMaterial({
     color: 0xd40000,
     shininess: 100,
-    specular: 0xffffff
+    specular: 0xffffff,
   });
   const cherry = new THREE.Mesh(cherryGeometry, cherryMaterial);
   cherryGroup.add(cherry);
@@ -1746,7 +2044,11 @@ function createCherryBlossomFlower() {
   }
 
   const centerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-  const centerMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00, roughness: 0.7, metalness: 0.0 });
+  const centerMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffff00,
+    roughness: 0.7,
+    metalness: 0.0,
+  });
   const center = new THREE.Mesh(centerGeometry, centerMaterial);
   flowerGroup.add(center);
 
@@ -1962,10 +2264,12 @@ function showTreeLabel(meta) {
     label.style.maxWidth = "420px";
     label.style.padding = "16px 20px";
     label.style.borderRadius = "18px";
-    label.style.background = "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
+    label.style.background =
+      "linear-gradient(135deg, rgba(0,0,0,0.78), rgba(0,0,0,0.6))";
     label.style.boxShadow = "0 18px 40px rgba(0,0,0,0.55)";
     label.style.color = "#ffffff";
-    label.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    label.style.fontFamily =
+      "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     label.style.zIndex = "200";
     label.style.backdropFilter = "blur(12px)";
     label.style.border = "1px solid rgba(255, 255, 255, 0.18)";
@@ -2049,7 +2353,11 @@ function animate() {
   }
 
   // Terrain color
-  terrain.material.color.lerpColors(new THREE.Color(0xddeeff), new THREE.Color(0x228b22), progress);
+  terrain.material.color.lerpColors(
+    new THREE.Color(0xddeeff),
+    new THREE.Color(0x228b22),
+    progress
+  );
 
   // Clouds movement
   clouds.children.forEach((cloud) => {
@@ -2062,12 +2370,14 @@ function animate() {
   trees.forEach((treeData) => {
     const { group } = treeData;
     const growth = group.userData?.growth ?? 0;
-    const state = group.userData.growthState ?? (group.userData.growthState = {
-      lastStage: getGrowthStage(growth),
-      nextEffectThreshold: Math.floor(Math.max(0, growth)) + 1,
-      animation: null,
-      initialized: true,
-    });
+    const state =
+      group.userData.growthState ??
+      (group.userData.growthState = {
+        lastStage: getGrowthStage(growth),
+        nextEffectThreshold: Math.floor(Math.max(0, growth)) + 1,
+        animation: null,
+        initialized: true,
+      });
 
     if (!state.initialized) {
       state.lastStage = getGrowthStage(growth);
@@ -2090,11 +2400,17 @@ function animate() {
 
     // Trigger per-percent effects
     let effectIndex = 0;
-    while (growth >= state.nextEffectThreshold && state.nextEffectThreshold <= 100) {
+    while (
+      growth >= state.nextEffectThreshold &&
+      state.nextEffectThreshold <= 100
+    ) {
       const currentStageData = getStageData(desiredStage);
       const delay = effectIndex * 160;
       const scheduledGrowth = growth;
-      setTimeout(() => triggerGrowthPulse(treeData, currentStageData, scheduledGrowth), delay);
+      setTimeout(
+        () => triggerGrowthPulse(treeData, currentStageData, scheduledGrowth),
+        delay
+      );
       state.nextEffectThreshold += 1;
       effectIndex += 1;
     }
@@ -2103,10 +2419,15 @@ function animate() {
     applyGrowthAnimation(treeData, nowMs);
 
     // Subtle emissive pulsing to keep plants alive feeling
-    const pulse = 0.7 + Math.sin(elapsedTime * 2 + group.position.x * 0.2) * 0.15;
+    const pulse =
+      0.7 + Math.sin(elapsedTime * 2 + group.position.x * 0.2) * 0.15;
     treeData.accentMeshes?.forEach((accent) => {
       if (accent.material) {
-        accent.material.opacity = THREE.MathUtils.clamp(0.4 + pulse * 0.5, 0.3, 1);
+        accent.material.opacity = THREE.MathUtils.clamp(
+          0.4 + pulse * 0.5,
+          0.3,
+          1
+        );
       }
     });
   });
@@ -2127,18 +2448,30 @@ function animate() {
         if (child.material) child.material.opacity = springProgress;
       });
 
-      const noiseX = noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
-      const noiseY = noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) * 0.05;
-      const noiseZ = noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
-      butterfly.position.add(butterfly.userData.velocity.clone().add(new THREE.Vector3(noiseX, noiseY, noiseZ)));
+      const noiseX =
+        noise3D(butterfly.userData.noiseOffset + elapsedTime * 0.1, 0, 0) * 0.1;
+      const noiseY =
+        noise3D(0, butterfly.userData.noiseOffset + elapsedTime * 0.1, 0) *
+        0.05;
+      const noiseZ =
+        noise3D(0, 0, butterfly.userData.noiseOffset + elapsedTime * 0.1) * 0.1;
+      butterfly.position.add(
+        butterfly.userData.velocity
+          .clone()
+          .add(new THREE.Vector3(noiseX, noiseY, noiseZ))
+      );
 
-      const flapAngle = Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
+      const flapAngle =
+        Math.sin(elapsedTime * 5 + butterfly.userData.flapPhase) * 0.5;
       butterfly.children[1].rotation.z = flapAngle;
       butterfly.children[2].rotation.z = -flapAngle;
 
-      if (butterfly.position.x > 50 || butterfly.position.x < -50) butterfly.userData.velocity.x *= -1;
-      if (butterfly.position.z > 50 || butterfly.position.z < -50) butterfly.userData.velocity.z *= -1;
-      if (butterfly.position.y > 15 || butterfly.position.y < 5) butterfly.userData.velocity.y *= -1;
+      if (butterfly.position.x > 50 || butterfly.position.x < -50)
+        butterfly.userData.velocity.x *= -1;
+      if (butterfly.position.z > 50 || butterfly.position.z < -50)
+        butterfly.userData.velocity.z *= -1;
+      if (butterfly.position.y > 15 || butterfly.position.y < 5)
+        butterfly.userData.velocity.y *= -1;
     });
 
     // Birds
@@ -2147,69 +2480,73 @@ function animate() {
         if (child.material) child.material.opacity = springProgress;
       });
 
-      const noiseX = noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
-      const noiseZ = noise3D(0, 0, bird.userData.noiseOffset + elapsedTime * 0.05) * 0.2;
-      bird.position.add(bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ)));
+      const noiseX =
+        noise3D(bird.userData.noiseOffset + elapsedTime * 0.05, 0, 0) * 0.2;
+      const noiseZ =
+        noise3D(0, 0, bird.userData.noiseOffset + elapsedTime * 0.05) * 0.2;
+      bird.position.add(
+        bird.userData.velocity.clone().add(new THREE.Vector3(noiseX, 0, noiseZ))
+      );
 
-      const flapAngle = Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
+      const flapAngle =
+        Math.sin(elapsedTime * 3 + bird.userData.flapPhase) * 0.3;
       bird.children[1].rotation.z = flapAngle;
       bird.children[2].rotation.z = -flapAngle;
 
       const velocity = bird.userData.velocity.clone().normalize();
       bird.lookAt(bird.position.clone().add(velocity));
 
-      if (bird.position.x > 100 || bird.position.x < -100) bird.userData.velocity.x *= -1;
-      if (bird.position.z > 100 || bird.position.z < -100) bird.userData.velocity.z *= -1;
+      if (bird.position.x > 100 || bird.position.x < -100)
+        bird.userData.velocity.x *= -1;
+      if (bird.position.z > 100 || bird.position.z < -100)
+        bird.userData.velocity.z *= -1;
     });
-    
+
     frogs?.children.forEach((frog) => {
       // Fade-in suave en primavera
-      frog.material.opacity = Math.min(
-        1,
-        frog.material.opacity + delta * 0.5
-      );
-    
+      frog.material.opacity = Math.min(1, frog.material.opacity + delta * 0.5);
+
       frog.userData.hopTimer += delta;
-    
+
       // Cuando toca saltar
       if (frog.userData.hopTimer > frog.userData.hopInterval) {
         frog.userData.hopTimer = 0;
-    
+
         // Movimiento horizontal
         frog.position.x += frog.userData.velocity.x;
         frog.position.z += frog.userData.velocity.z;
-    
+
         // Rebote pequeño
         frog.userData.jumpPhase = 0;
       }
-    
+
       // Animación de salto (parábola simple)
       if (frog.userData.jumpPhase !== undefined) {
         frog.userData.jumpPhase += delta * 6;
         const jumpHeight = Math.sin(frog.userData.jumpPhase) * 0.6;
         frog.position.y = frog.userData.baseY + Math.max(0, jumpHeight);
-    
+
         if (frog.userData.jumpPhase >= Math.PI) {
           frog.position.y = frog.userData.baseY;
           frog.userData.jumpPhase = undefined;
         }
       }
-    
+
       // Ruido suave para que no se muevan igual
       const noiseX =
         noise3D(frog.userData.noiseOffset, clock.elapsedTime * 0.2, 0) * 0.02;
       const noiseZ =
         noise3D(0, frog.userData.noiseOffset, clock.elapsedTime * 0.2) * 0.02;
-    
+
       frog.position.x += noiseX;
       frog.position.z += noiseZ;
-    
+
       // Mirar hacia donde "salta"
       frog.rotation.y = Math.atan2(
         frog.userData.velocity.x,
         frog.userData.velocity.z
       );
-    
+
       // Límites del terreno
       if (frog.position.x > 48 || frog.position.x < -48)
         frog.userData.velocity.x *= -1;

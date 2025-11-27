@@ -11,7 +11,7 @@ import {
   Loader,
   Modal,
   Progress,
-  Badge
+  Badge,
 } from "@mantine/core";
 import {
   doc,
@@ -589,6 +589,38 @@ export default function Home({ navigate }) {
           >
             Ver mi árbol 🌳
           </Button>
+
+          {treeGrowth >= 100 && (
+            <Card
+              radius="lg"
+              mt="md"
+              p="md"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.95)",
+              }}
+            >
+              <Text fw={600} size="sm" ta="center" mb="xs">
+                🌟 ¡Tu sueño ha florecido por completo! 🌟
+              </Text>
+              <Text size="xs" c="dimmed" ta="center" mb="md">
+                Ahora puedes ver una imagen especial generada a partir de tu
+                sueño. Guárdala como recordatorio de lo que quieres lograr.
+              </Text>
+              <Button
+                fullWidth
+                radius="xl"
+                size="md"
+                style={{
+                  fontWeight: 700,
+                  backgroundColor: "#FACC15",
+                  color: "#000",
+                }}
+                onClick={() => navigate("/mi-sueno")}
+              >
+                Ver la imagen de mi sueño ✨
+              </Button>
+            </Card>
+          )}
         </div>
       </div>
       <Modal

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Home from "./Home";
 import Admin from "./Admin";
+import DreamImage from "./DreamImage";
 
 // Componente que simula un router básico leyendo el pathname
 export default function Router() {
@@ -31,6 +32,8 @@ export default function Router() {
   // - Sino, renderizamos <Home />
   if (route === "/admin") {
     return <Admin navigate={navigate} />;
+  } else if (route === "/mi-sueno") {
+    return <DreamImage navigate={navigate} />; // NUEVA RUTA
   } else {
     return <Home navigate={navigate} />;
   }

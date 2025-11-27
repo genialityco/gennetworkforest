@@ -1038,7 +1038,7 @@ function createBirds() {
 
 function createSky() {
   // Load HDR environment map (only once)
-  new RGBELoader().load("/src/hdr/partly_cloudy_puresky.hdr", (hdr) => {
+  new RGBELoader().load("/hdr/partly_cloudy_puresky.hdr", (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     scene.environment = hdr;
     scene.background = hdr;

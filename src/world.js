@@ -1,6 +1,10 @@
 // world.js (o como lo tengas llamado)
 import * as THREE from "three";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { createNoise3D } from "simplex-noise";
 import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 import { db } from "./firebaseConfig.js";
@@ -11,6 +15,7 @@ const treeObjects = new Map(); // key: treeId, value: { trunk, canopy, flowers, 
 let scene,
   camera,
   renderer,
+  composer,
   clock,
   mixers = [],
   trees = [],
@@ -410,6 +415,8 @@ function init() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
   document.body.appendChild(renderer.domElement);
 
   clock = new THREE.Clock();
@@ -453,6 +460,25 @@ function init() {
   springAudio = new Audio("/birds-frogs-nature-8257.mp3");
   winterAudio.loop = true;
   springAudio.loop = true;
+
+  // Setup post-processing with Bloom and color grading
+  composer = new EffectComposer(renderer);
+  
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+
+  // Add Bloom effect for visual enhancement
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.4,  // strength
+    0.4,  // radius
+    0.75  // threshold
+  );
+  composer.addPass(bloomPass);
+
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+  
   animate();
 }
 
@@ -1164,7 +1190,7 @@ function animate() {
   // Actualizar posiciones de las cards de la tarima
   updateStageInfoUI();
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 // -----------------------------------------------------------------------------
@@ -1178,4 +1204,5 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  composer.setSize(window.innerWidth, window.innerHeight);
 });

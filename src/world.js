@@ -25,7 +25,7 @@ let scene,
   sky,
   clouds;
 // Declare global variables for new elements
-let sun, sunlight, butterflies, birds;
+let sun, sunlight, butterflies, birds, frogs;
 
 // Tree counting
 let treeCount = 0;
@@ -432,7 +432,6 @@ function init() {
 
   // Fog (aunque el mundo está en primavera, dejamos fog suave si quieres)
   scene.fog = new THREE.Fog(0xaaaaaa, 10, 50);
-
   // Basic scene objects
   createSky();
   createClouds();
@@ -441,6 +440,8 @@ function init() {
   createSun();
   createButterflies();
   createBirds();
+  createFrogs();
+ 
 
   // Marco
   createOverlayFrame();
@@ -510,16 +511,109 @@ function addAudioStartButton() {
 // -----------------------------------------------------------------------------
 
 function createSun() {
-  const sunGeometry = new THREE.SphereGeometry(2, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+  // Geometría del sol con más segmentos para suavidad
+  const sunGeometry = new THREE.SphereGeometry(2, 64, 64);
+  
+  // Material con emisión para que brille
+  const sunMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0xfff4e6,  // Amarillo más natural
+    emissive: 0xffd700,
+    emissiveIntensity: 1
+  });
+  
   sun = new THREE.Mesh(sunGeometry, sunMaterial);
   sun.position.set(30, 30, -50);
   sun.visible = false;
   scene.add(sun);
 
-  sunlight = new THREE.DirectionalLight(0xffff00, 0);
+  // Halo exterior del sol (glow effect)
+  const glowGeometry = new THREE.SphereGeometry(2.5, 64, 64);
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffaa00,
+    transparent: true,
+    opacity: 0.3,
+    side: THREE.BackSide
+  });
+  const sunGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+  sun.add(sunGlow);
+
+  // Segundo halo más suave
+  const glow2Geometry = new THREE.SphereGeometry(3.2, 64, 64);
+  const glow2Material = new THREE.MeshBasicMaterial({
+    color: 0xffdd88,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.BackSide
+  });
+  const sunGlow2 = new THREE.Mesh(glow2Geometry, glow2Material);
+  sun.add(sunGlow2);
+
+  // Luz direccional principal del sol
+  sunlight = new THREE.DirectionalLight(0xfff4e6, 1.5);
   sunlight.position.copy(sun.position);
+  sunlight.castShadow = true;
+  
+  // Configuración de sombras (opcional)
+  sunlight.shadow.mapSize.width = 2048;
+  sunlight.shadow.mapSize.height = 2048;
+  sunlight.shadow.camera.near = 0.5;
+  sunlight.shadow.camera.far = 500;
+  
   scene.add(sunlight);
+
+  // Luz ambiental suave para simular la dispersión atmosférica
+  const ambientSunlight = new THREE.AmbientLight(0xfff4e6, 0.3);
+  scene.add(ambientSunlight);
+
+  // Animación sutil del sol (opcional)
+  function animateSun() {
+    if (sun.visible) {
+      sun.rotation.y += 0.001;
+      // Pulso suave en los halos
+      sunGlow.scale.setScalar(1 + Math.sin(Date.now() * 0.001) * 0.05);
+    }
+    requestAnimationFrame(animateSun);
+  }
+  animateSun();
+}
+function createFrogs() {
+  frogs = new THREE.Group();
+  scene.add(frogs);
+
+  const frogCount = 12;
+  const textureLoader = new THREE.TextureLoader();
+  const frogTexture = textureLoader.load("/imagenes/rana.png");
+
+  for (let i = 0; i < frogCount; i++) {
+    const material = new THREE.SpriteMaterial({
+      map: frogTexture,
+      transparent: true,
+      opacity: 0,
+    });
+
+    const frog = new THREE.Sprite(material);
+    frog.scale.set(1.2, 1.2, 1.2);
+
+    frog.position.set(
+      (Math.random() - 0.5) * 40,
+      0.05, // pegada al suelo
+      (Math.random() - 0.5) * 40
+    );
+
+    frog.userData = {
+      baseY: frog.position.y,
+      hopTimer: Math.random() * 3,
+      hopInterval: 2 + Math.random() * 3,
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.6,
+        0,
+        (Math.random() - 0.5) * 0.6
+      ),
+      noiseOffset: Math.random() * 100,
+    };
+
+    frogs.add(frog);
+  }
 }
 
 function createButterflies() {
@@ -530,7 +624,9 @@ function createButterflies() {
   const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
 
   const textureLoader = new THREE.TextureLoader();
-  const butterflyTexture = textureLoader.load("path/to/butterfly_wing_texture.png");
+  const butterflyTexture = textureLoader.load(
+    "/imagenes/mariposa.png"
+  );
 
   for (let i = 0; i < butterflyCount; i++) {
     const bodyGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
@@ -571,12 +667,28 @@ function createBirds() {
   birds = new THREE.Group();
   scene.add(birds);
 
+  // Paleta de colores para los pájaros
+  const birdColors = [
+    0xff6b6b, // Rojo coral
+    0x4ecdc4, // Turquesa
+    0xffe66d, // Amarillo
+    0x95e1d3, // Verde menta
+    0xf38181, // Rosa salmón
+  ];
+
+  // Cargar textura para las alas
+  const textureLoader = new THREE.TextureLoader();
+  const wingTexture = textureLoader.load(
+    '/imagenes/bird.png'
+  );
+
   const birdCount = 5;
   for (let i = 0; i < birdCount; i++) {
+    // Cuerpo con color único para cada pájaro
     const bodyGeometry = new THREE.SphereGeometry(0.4, 16, 16);
     bodyGeometry.scale(1, 0.5, 1.5);
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-      color: 0x555555,
+    const bodyMaterial = new THREE.MeshPhongMaterial({
+      color: birdColors[i % birdColors.length],
       transparent: true,
       opacity: 0,
       roughness: 0.7,
@@ -584,9 +696,10 @@ function createBirds() {
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
 
+    // Alas con textura de imagen
     const wingGeometry = new THREE.PlaneGeometry(0.6, 0.3);
-    const wingMaterial = new THREE.MeshStandardMaterial({
-      color: 0x444444,
+    const wingMaterial = new THREE.MeshPhongMaterial({
+      map: wingTexture,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0,
@@ -597,13 +710,14 @@ function createBirds() {
     leftWing.position.set(-0.3, 0, 0);
     leftWing.rotation.y = Math.PI / 2;
 
-    const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+    const rightWing = new THREE.Mesh(wingGeometry, wingMaterial.clone());
     rightWing.position.set(0.3, 0, 0);
     rightWing.rotation.y = -Math.PI / 2;
 
+    // Cabeza del mismo color que el cuerpo
     const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
-    const headMaterial = new THREE.MeshStandardMaterial({
-      color: 0x555555,
+    const headMaterial = new THREE.MeshPhongMaterial({
+      color: birdColors[i % birdColors.length],
       transparent: true,
       opacity: 0,
       roughness: 0.7,
@@ -674,9 +788,10 @@ function createClouds() {
   }
 }
 
+
 function createTerrain() {
   const size = 100;
-  const segments = 150;
+  const segments = 100;
   const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
 
   const vertices = geometry.attributes.position.array;
@@ -828,6 +943,33 @@ function createLeafCanopy(parent, trunk) {
   return canopyGroup;
 }
 
+function createCherryFruit() {
+  const cherryGroup = new THREE.Group();
+
+  // Fruto rojo brillante
+  const cherryGeometry = new THREE.SphereGeometry(0.5, 16, 16);
+  const cherryMaterial = new THREE.MeshPhongMaterial({
+    color: 0xd40000,
+    shininess: 100,
+    specular: 0xffffff
+  });
+  const cherry = new THREE.Mesh(cherryGeometry, cherryMaterial);
+  cherryGroup.add(cherry);
+
+  // Pequeño tallo verde
+  const stemGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.2, 8);
+  const stemMaterial = new THREE.MeshPhongMaterial({ color: 0x3d6b1f });
+  const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+  stem.position.y = 0.15;
+  stem.rotation.x = Math.PI * 0.15; // ligeramente inclinado
+  cherryGroup.add(stem);
+
+  // Brillo especular extra (opcional, para que parezca jugosa)
+  cherryGeometry.translate(0, -0.02, 0); // pequeño desplazamiento para reflejo
+
+  return cherryGroup;
+}
+
 function createCherryBlossomFlower() {
   const flowerGroup = new THREE.Group();
 
@@ -968,10 +1110,25 @@ function createFlowersAndFruits(parent, trunk) {
   const flowerCount = 20;
   for (let i = 0; i < flowerCount; i++) {
     const flower = createCherryBlossomFlower();
-    flower.position.set((Math.random() - 0.5) * 4, trunk.position.y + 3 + Math.random() * 4, (Math.random() - 0.5) * 4);
-    flower.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    const fruit = createCherryFruit();
+    flower.position.set(
+      (Math.random() - 0.5) * 4,
+      trunk.position.y + 3 + Math.random() * 4,
+      (Math.random() - 0.5) * 4
+    );
+    fruit.position.set(
+      (Math.random() - 0.5) * 4,
+      trunk.position.y + 3 + Math.random() * 4,
+      (Math.random() - 0.5) * 4
+    );
+    flower.rotation.set(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI
+    );
     flower.scale.set(0, 0, 0);
     flowersGroup.add(flower);
+    flowersGroup.add(fruit);
   }
   return flowersGroup;
 }
@@ -1220,6 +1377,114 @@ function animate() {
 
       if (bird.position.x > 100 || bird.position.x < -100) bird.userData.velocity.x *= -1;
       if (bird.position.z > 100 || bird.position.z < -100) bird.userData.velocity.z *= -1;
+    });
+    frogs?.children.forEach((frog) => {
+      // Fade-in suave en primavera
+      frog.material.opacity = Math.min(
+        1,
+        frog.material.opacity + delta * 0.5
+      );
+    
+      frog.userData.hopTimer += delta;
+    
+      // Cuando toca saltar
+      if (frog.userData.hopTimer > frog.userData.hopInterval) {
+        frog.userData.hopTimer = 0;
+    
+        // Movimiento horizontal
+        frog.position.x += frog.userData.velocity.x;
+        frog.position.z += frog.userData.velocity.z;
+    
+        // Rebote pequeño
+        frog.userData.jumpPhase = 0;
+      }
+    
+      // Animación de salto (parábola simple)
+      if (frog.userData.jumpPhase !== undefined) {
+        frog.userData.jumpPhase += delta * 6;
+        const jumpHeight = Math.sin(frog.userData.jumpPhase) * 0.6;
+        frog.position.y = frog.userData.baseY + Math.max(0, jumpHeight);
+    
+        if (frog.userData.jumpPhase >= Math.PI) {
+          frog.position.y = frog.userData.baseY;
+          frog.userData.jumpPhase = undefined;
+        }
+      }
+    
+      // Ruido suave para que no se muevan igual
+      const noiseX =
+        noise3D(frog.userData.noiseOffset, clock.elapsedTime * 0.2, 0) * 0.02;
+      const noiseZ =
+        noise3D(0, frog.userData.noiseOffset, clock.elapsedTime * 0.2) * 0.02;
+    
+      frog.position.x += noiseX;
+      frog.position.z += noiseZ;
+    
+      // Mirar hacia donde "salta"
+      frog.rotation.y = Math.atan2(
+        frog.userData.velocity.x,
+        frog.userData.velocity.z
+      );
+    
+      // Límites del terreno
+      if (frog.position.x > 48 || frog.position.x < -48)
+        frog.userData.velocity.x *= -1;
+      if (frog.position.z > 48 || frog.position.z < -48)
+        frog.userData.velocity.z *= -1;
+    });
+    frogs?.children.forEach((frog) => {
+      // Fade-in suave en primavera
+      frog.material.opacity = Math.min(
+        1,
+        frog.material.opacity + delta * 0.5
+      );
+    
+      frog.userData.hopTimer += delta;
+    
+      // Cuando toca saltar
+      if (frog.userData.hopTimer > frog.userData.hopInterval) {
+        frog.userData.hopTimer = 0;
+    
+        // Movimiento horizontal
+        frog.position.x += frog.userData.velocity.x;
+        frog.position.z += frog.userData.velocity.z;
+    
+        // Rebote pequeño
+        frog.userData.jumpPhase = 0;
+      }
+    
+      // Animación de salto (parábola simple)
+      if (frog.userData.jumpPhase !== undefined) {
+        frog.userData.jumpPhase += delta * 6;
+        const jumpHeight = Math.sin(frog.userData.jumpPhase) * 0.6;
+        frog.position.y = frog.userData.baseY + Math.max(0, jumpHeight);
+    
+        if (frog.userData.jumpPhase >= Math.PI) {
+          frog.position.y = frog.userData.baseY;
+          frog.userData.jumpPhase = undefined;
+        }
+      }
+    
+      // Ruido suave para que no se muevan igual
+      const noiseX =
+        noise3D(frog.userData.noiseOffset, clock.elapsedTime * 0.2, 0) * 0.02;
+      const noiseZ =
+        noise3D(0, frog.userData.noiseOffset, clock.elapsedTime * 0.2) * 0.02;
+    
+      frog.position.x += noiseX;
+      frog.position.z += noiseZ;
+    
+      // Mirar hacia donde "salta"
+      frog.rotation.y = Math.atan2(
+        frog.userData.velocity.x,
+        frog.userData.velocity.z
+      );
+    
+      // Límites del terreno
+      if (frog.position.x > 48 || frog.position.x < -48)
+        frog.userData.velocity.x *= -1;
+      if (frog.position.z > 48 || frog.position.z < -48)
+        frog.userData.velocity.z *= -1;
     });
   }
 

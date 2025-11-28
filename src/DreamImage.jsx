@@ -38,16 +38,20 @@ async function generateImageFromText(text, opts) {
 function buildPromptFromDream(dream) {
   const bannerText = `Estás un paso más cerca de lograr: ${dream}, vas por buen camino.`;
 
-  return `Create an inspiring and emotionally uplifting image centered on goal achievement.
-In the background, generate a symbolic scene connected to the dream provided. This background should visually represent progress toward an achievable, real-life goal.
-A path must extend from the foreground toward the horizon, symbolizing dedication, discipline, growth, and the journey toward success.
-At the end of the path, place a goal banner (meta / finish line style).
-On that banner, write the following text exactly as provided, without altering, rephrasing, correcting, or changing a single character:
+  return `Create a highly inspiring and emotionally uplifting photorealistic image focused on goal achievement. The art style should be realistic but with a slightly idealized, aspirational touch, using warm and hopeful lighting, vivid colors, and a subtle depth of field.
 
-‘${bannerText}’
+*Background Scene:* Generate a dynamic and symbolic scene directly connected to the user's provided dream, visually representing significant progress towards an achievable, real-life goal. This scene should subtly blend with the overall composition.
 
-The text must be perfectly clear, crisp, readable, and identical to the original input dream.
-Art direction: warm and hopeful lighting, realistic but slightly idealized style, aspirational and emotional atmosphere, vivid colors, subtle depth of field.`;
+*Path of Progress:* A clear, well-defined path must extend from the immediate foreground, leading dynamically towards the horizon. This path symbolizes dedication, discipline, growth, and the personal journey toward success.
+
+*Finish Line Banner with CRISP TEXT:* At the definitive end of this path, strategically place a prominent, brightly lit goal banner, designed in a classic "finish line" or "meta" style.
+*CRITICAL INSTRUCTION FOR TEXT:* On this banner, the following exact text must be perfectly rendered:
+
+${bannerText}
+
+The text on the banner MUST be perfectly clear, sharp, legible, and identical to the input ${bannerText}, without any alteration, rephrasing, correction, or change to a single character. Use a bold, clean, sans-serif font style for maximum readability.
+
+*Atmosphere:* The overall atmosphere should be deeply emotional, motivating, and filled with hope.`;
 }
 
 export default function DreamImage({ navigate }) {
@@ -104,7 +108,8 @@ export default function DreamImage({ navigate }) {
     } catch (err) {
       console.error("Error generando imagen:", err);
       setErrorMsg(
-        err?.message || "Hubo un problema generando la imagen, inténtalo de nuevo."
+        err?.message ||
+          "Hubo un problema generando la imagen, inténtalo de nuevo."
       );
     } finally {
       setGenerating(false);

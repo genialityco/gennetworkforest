@@ -27,7 +27,7 @@ import { db, ensureAnonymousUser, auth } from "./firebaseConfig";
 import { signOut } from "firebase/auth";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Environment } from "@react-three/drei";
-import { UserTree3D } from "./Tree";
+import { UserTree3D } from "./UserTree3D";
 
 const usersCollection = collection(db, "users");
 const treesCollection = collection(db, "trees");
@@ -455,6 +455,8 @@ export default function Home({ navigate }) {
         position: "relative",
       }}
     >
+        {/* 🌳 Árbol (fondo real) */}
+  <UserTree3D grow={treeGrowth} />
       <div
         style={{
           height: "100%",
@@ -621,9 +623,12 @@ export default function Home({ navigate }) {
               </Button>
             </Card>
           )}
+          
         </div>
       </div>
-      <Modal
+  
+      
+      {/* <Modal
         opened={showTree3D}
         onClose={() => setShowTree3D(false)}
         fullScreen
@@ -635,7 +640,7 @@ export default function Home({ navigate }) {
       >
         <UserTree3D grow={treeGrowth} />
 
-        {/* Overlay UI */}
+       
         <div
           style={{
             position: "absolute",
@@ -659,7 +664,7 @@ export default function Home({ navigate }) {
             </Text>
           </Card>
         </div>
-      </Modal>
+      </Modal> */}
     </div>
   );
 }

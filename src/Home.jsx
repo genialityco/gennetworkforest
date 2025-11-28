@@ -113,47 +113,57 @@ export default function Home({ navigate }) {
   }, [userDoc]);
 
   // 2) Crear usuario + árbol
-  async function handleCreateUserAndTree() {
-    if (!name.trim() || !dream.trim()) {
-      alert("Por favor escribe tu nombre y tu sueño.");
+async function handleCreateUserAndTree() {
+  if (!name.trim() || !dream.trim()) {
+    alert("Por favor escribe tu nombre y tu sueño.");
+    return;
+  }
+
+  setCreating(true);
+  try {
+    // 🔹 Aseguramos usuario anónimo AQUÍ, también en Safari
+    const user = await ensureAnonymousUser();
+    if (!user) {
+      alert(
+        "No pudimos iniciar tu sesión anónima. Intenta recargar la página o usar otro navegador."
+      );
       return;
     }
-    const user = auth.currentUser;
-    if (!user) return;
 
-    setCreating(true);
-    try {
-      const { x, z } = getRandomTreePosition();
+    const { x, z } = getRandomTreePosition();
 
-      const treeDoc = await addDoc(treesCollection, {
-        userId: user.uid,
-        userName: name.trim(),
-        dream: dream.trim(),
-        growth: 0,
-        state: "SEED",
-        x,
-        z,
-        createdAt: serverTimestamp(),
-      });
+    const treeDoc = await addDoc(treesCollection, {
+      userId: user.uid,
+      userName: name.trim(),
+      dream: dream.trim(),
+      growth: 0,
+      state: "SEED",
+      x,
+      z,
+      createdAt: serverTimestamp(),
+    });
 
-      const userRef = doc(db, "users", user.uid);
-      const userData = {
-        name: name.trim(),
-        dream: dream.trim(),
-        treeId: treeDoc.id,
-        createdAt: serverTimestamp(),
-      };
-      await setDoc(userRef, userData, { merge: true });
+    const userRef = doc(db, "users", user.uid);
+    const userData = {
+      name: name.trim(),
+      dream: dream.trim(),
+      treeId: treeDoc.id,
+      createdAt: serverTimestamp(),
+    };
 
-      setUserDoc({ id: userRef.id, ...userData });
-      setCareScreen("intro"); // al crear por primera vez, empieza en la pantalla de presentación
-    } catch (err) {
-      console.error("Error creando usuario/árbol:", err);
-      alert("Ocurrió un error, inténtalo de nuevo.");
-    } finally {
-      setCreating(false);
-    }
+    await setDoc(userRef, userData, { merge: true });
+
+    // 🔹 Esto fuerza el cambio de pantalla
+    setUserDoc({ id: userRef.id, ...userData });
+    setCareScreen("intro");
+  } catch (err) {
+    console.error("Error creando usuario/árbol:", err);
+    alert("Ocurrió un error, inténtalo de nuevo.");
+  } finally {
+    setCreating(false);
   }
+}
+
 
   // Helper para actualizar growth
   async function updateGrowth(delta) {

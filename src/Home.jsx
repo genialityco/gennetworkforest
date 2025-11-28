@@ -505,7 +505,8 @@ async function handleCreateUserAndTree() {
             radius="lg"
             p="md"
             style={{
-              backgroundColor: "rgba(255, 255, 255, 0.9)",
+              backgroundColor: "rgba(255, 255, 255, 0.6)",
+              zIndex:9999,
             }}
           >
             <Text size="sm" c="dimmed">
@@ -545,7 +546,7 @@ async function handleCreateUserAndTree() {
         </div>
 
         {/* Acciones */}
-        <div style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>
+        <div style={{ marginTop: "-5rem", marginBottom: "0.5rem", zIndex:8000 }}>
           <Group
             justify="space-around"
             align="flex-end"
@@ -582,6 +583,7 @@ async function handleCreateUserAndTree() {
                 backgroundColor: "rgba(255, 255, 255, 0.82)",
                 boxShadow: "0 8px 18px rgba(0, 0, 0, 0.15)",
                 backdropFilter: "blur(6px)",
+                
               }}
             >
               <SingleTreeViewer growth={treeGrowth} />

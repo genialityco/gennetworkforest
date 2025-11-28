@@ -33,7 +33,7 @@ let scene,
   sky,
   clouds;
 // Declare global variables for new elements
-let sun, sunlight, butterflies, birds, frogs, hotAirBalloon;
+let sun, sunlight, butterflies, birds, frogs, hotAirBalloon ;
 let balloonVelocity;
 
 const BALLOON_BOUNDS = { x: 36, z: 6 };
@@ -1573,14 +1573,46 @@ function createStageVisual(stageId, baseHeight) {
     metalness: 0,
   });
 
-  const leafMaterial = new THREE.MeshStandardMaterial({
-    color: stageData.leafColor,
-    emissive: stageData.accentColor,
-    emissiveIntensity: 0.08,
-    flatShading: true,
-    roughness: 0.6,
-    metalness: 0,
-  });
+  const windTimeUniform = { value: 0 };
+
+const leafMaterial = new THREE.MeshStandardMaterial({
+  color: stageData.leafColor,
+  emissive: stageData.accentColor,
+  emissiveIntensity: 0.08,
+  flatShading: true,
+  roughness: 0.6,
+  metalness: 0,
+});
+
+// Añadir shader de viento
+leafMaterial.userData.windTime = windTimeUniform;
+leafMaterial.onBeforeCompile = (shader) => {
+  shader.uniforms.windTime = { value: 0 };
+  
+  shader.vertexShader = `
+    uniform float windTime;
+    ${shader.vertexShader}
+  `;
+  
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <begin_vertex>',
+    `
+    vec3 transformed = vec3(position);
+    
+    // Efecto de viento
+    float heightFactor = (position.y + 3.0) / 6.0;
+    float windX = sin(windTime * 1.5 + position.y * 0.5) * heightFactor * 0.2;
+    float windZ = cos(windTime * 1.2 + position.x * 0.3) * heightFactor * 0.15;
+    
+    transformed.x += windX;
+    transformed.z += windZ;
+    `
+  );
+  
+  shader.uniforms.windTime = windTimeUniform;
+};
+
+leafMaterial.customProgramCacheKey = () => 'wind-shader-' + Math.random();
 
   const accentMaterial = new THREE.MeshStandardMaterial({
     color: stageData.accentColor,
@@ -1593,6 +1625,15 @@ function createStageVisual(stageId, baseHeight) {
 
   const addLeaf = (geometry, position) => {
     const leaf = new THREE.Mesh(geometry, leafMaterial.clone());
+  
+    // 🌬️ Copiar el shader y uniform de viento
+    if (leafMaterial.userData.windTime) {
+      leaf.material.userData.windTime = leafMaterial.userData.windTime;
+      leaf.material.onBeforeCompile = leafMaterial.onBeforeCompile;
+      leaf.material.customProgramCacheKey = leafMaterial.customProgramCacheKey;
+      leaf.material.needsUpdate = true;
+    }
+    
     leaf.position.copy(position);
     leaf.castShadow = true;
     leaf.receiveShadow = true;
@@ -1811,6 +1852,12 @@ function createStageVisual(stageId, baseHeight) {
       break;
     }
   }
+  stageGroup.userData.windTimeUniform = windTimeUniform;
+  leaves.forEach(leaf => {
+    if (leaf.material && leaf.material.userData.windTime) {
+      leaf.userData.windTimeUniform = leaf.material.userData.windTime;
+    }
+  });
 
   return {
     group: stageGroup,
@@ -2545,6 +2592,22 @@ function animate() {
         );
       }
     });
+    if (treeData.leafMeshes && treeData.leafMeshes.length > 0) {
+      treeData.leafMeshes.forEach(leaf => {
+        if (leaf.userData.windTimeUniform) {
+          leaf.userData.windTimeUniform.value = elapsedTime;
+        }
+      });
+    }
+    
+    // También para los acentos si quieres que se muevan
+    if (treeData.accentMeshes && treeData.accentMeshes.length > 0) {
+      treeData.accentMeshes.forEach(accent => {
+        if (accent.userData.windTimeUniform) {
+          accent.userData.windTimeUniform.value = elapsedTime;
+        }
+      });
+    }
   });
 
   const springProgress = Math.max(0, (progress - 0.7) / 0.3);
@@ -2695,7 +2758,16 @@ function animate() {
       }
     });
   });
+  const windTime = clock.getElapsedTime();
 
+  treeObjects.forEach(treeObj => {
+    const group = treeObj.group;
+    group.traverse((child) => {
+      if (child.isMesh && child.material && child.material.userData.shader) {
+        child.material.userData.shader.uniforms.time.value = windTime;
+      }
+    });
+  });
   // Actualizar posiciones de las cards de la tarima
   updateStageInfoUI();
 

@@ -25,9 +25,8 @@ import {
 } from "firebase/firestore";
 import { db, ensureAnonymousUser, auth } from "./firebaseConfig";
 import { signOut } from "firebase/auth";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Environment } from "@react-three/drei";
 import { UserTree3D } from "./Tree";
+import SingleTreeViewer from "./SingleTreeViewer.jsx";
 
 const usersCollection = collection(db, "users");
 const treesCollection = collection(db, "trees");
@@ -547,12 +546,18 @@ async function handleCreateUserAndTree() {
 
         {/* Acciones */}
         <div style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>
-          <Group justify="space-around" style={{ marginBottom: "1.5rem" }}>
+          <Group
+            justify="space-around"
+            align="flex-end"
+            style={{ marginBottom: "1.5rem",justifyContent:"center",   position:"relative" }}
+            
+          
+          >
             {/* Regar */}
             <button
               onClick={handleWater}
               disabled={watering || treeGrowth >= 100} // Deshabilitar si está lleno
-              style={{ border: "none", background: "none", padding: 0 }}
+              style={{ border: "none", background: "none", padding: 0, position:"absolute",bottom:0,left:0,zIndex:999 }}
             >
               <img
                 src="/imagenes/CUIDAR/ICONO-01.png"
@@ -567,11 +572,25 @@ async function handleCreateUserAndTree() {
               />
             </button>
 
+            <div
+              id="mytree"
+              style={{
+                width: "70%",
+                maxWidth: "400px",
+                padding: "0.75rem",
+                borderRadius: "1.5rem",
+                backgroundColor: "rgba(255, 255, 255, 0.82)",
+                boxShadow: "0 8px 18px rgba(0, 0, 0, 0.15)",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              <SingleTreeViewer growth={treeGrowth} />
+            </div>
             {/* Abonar */}
             <button
               onClick={handleFertilize}
               disabled={fertilizing || treeGrowth >= 100} // Deshabilitar si está lleno
-              style={{ border: "none", background: "none", padding: 0 }}
+              style={{ border: "none", background: "none", padding: 0,position:"absolute",bottom:0,right:0,zIndex:999 }}
             >
               <img
                 src="/imagenes/CUIDAR/ICONO-02.png"

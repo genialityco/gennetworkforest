@@ -583,8 +583,9 @@ export function createTreeSystem({ scene }) {
 
   function startGrowthAnimation(treeData, targetGrowth, options = {}) {
     const now = performance.now();
-    const currentScale = treeData.group.scale.x || 0.35;
-    const finalScale = getScaleForGrowth(targetGrowth);
+    const baseScale = treeData.group.userData.baseScale ?? 1;
+    const currentScale = treeData.group.scale.x || baseScale * 0.35;
+    const finalScale = baseScale * getScaleForGrowth(targetGrowth);
     const overshootMultiplier = options.overshootMultiplier ?? 1.18;
     const duration = options.duration ?? 1200;
 
@@ -600,10 +601,12 @@ export function createTreeSystem({ scene }) {
   }
 
   function applyGrowthAnimation(treeData, timestampMs) {
+    const baseScale = treeData.group.userData.baseScale ?? 1;
     const state = treeData.group.userData.growthState;
     const animation = state.animation;
     if (!animation) {
-      const targetScale = getScaleForGrowth(treeData.group.userData.growth ?? 0);
+      const targetScale =
+        baseScale * getScaleForGrowth(treeData.group.userData.growth ?? 0);
       const smoothScale = THREE.MathUtils.lerp(
         treeData.group.scale.x || targetScale,
         targetScale,
@@ -725,7 +728,9 @@ export function createTreeSystem({ scene }) {
   } = {}) {
     const treeGroup = new THREE.Group();
     treeGroup.position.copy(position);
-    treeGroup.scale.set(scale, scale, scale);
+    const baseScale = scale ?? 0.1;
+    treeGroup.scale.set(baseScale, baseScale, baseScale);
+    treeGroup.userData.baseScale = baseScale;
     scene.add(treeGroup);
 
     const visuals = createStageVisual(initialStage, height);
@@ -771,7 +776,8 @@ export function createTreeSystem({ scene }) {
       if (treeData.stage !== state.lastStage) {
         switchTreeStage(treeData, state.lastStage);
       }
-      const initialScale = getScaleForGrowth(safeGrowth);
+      const initialScale =
+        (treeData.group.userData.baseScale ?? 1) * getScaleForGrowth(safeGrowth);
       treeData.group.scale.setScalar(initialScale);
     }
 

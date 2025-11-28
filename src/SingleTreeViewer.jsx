@@ -40,7 +40,6 @@ export default function SingleTreeViewer({ growth = 0 }) {
     const treeSystem = createTreeSystem({ scene });
     const {
       createTree,
-      switchTreeStage,
       getScaleForGrowth,
       updateTreeLifecycle,
       clearScheduledEffects,
@@ -54,7 +53,7 @@ export default function SingleTreeViewer({ growth = 0 }) {
       position: new THREE.Vector3(0, 0, 0),
       height: baseHeight,
       initialStage,
-      scale: 0.12,
+      scale: 0.32,
     });
 
     treeData.group.userData.growth = clampedGrowth;
@@ -65,13 +64,13 @@ export default function SingleTreeViewer({ growth = 0 }) {
       initialized: true,
     };
 
-    if (treeData.stage !== initialStage) {
-      switchTreeStage(treeData, initialStage);
-    }
-    treeData.group.scale.setScalar(getScaleForGrowth(clampedGrowth));
+    const baseScale = treeData.group.userData?.baseScale ?? 1;
+    treeData.group.scale.setScalar(
+      baseScale * getScaleForGrowth(clampedGrowth)
+    );
 
     const baseDisc = new THREE.Mesh(
-      new THREE.CircleGeometry(6, 48),
+      new THREE.CircleGeometry(4.2, 48),
       new THREE.MeshStandardMaterial({
         color: 0x2c3e2f,
         metalness: 0,
@@ -163,7 +162,7 @@ export default function SingleTreeViewer({ growth = 0 }) {
       return;
     }
 
-    const { treeData, treeSystem } = contextRef.current;
+    const { treeData } = contextRef.current;
     const nextGrowth = Math.max(0, Math.min(100, growth ?? 0));
     treeData.group.userData.growth = nextGrowth;
 
@@ -171,22 +170,21 @@ export default function SingleTreeViewer({ growth = 0 }) {
       treeData.group.userData.growthState ??
       (treeData.group.userData.growthState = {
         lastStage: getGrowthStage(nextGrowth),
-        nextEffectThreshold: Math.floor(nextGrowth) + 1,
+        nextEffectThreshold: Math.floor(Math.max(0, nextGrowth)) + 1,
         animation: null,
         initialized: true,
       });
 
-    const targetStage = getGrowthStage(nextGrowth);
-    if (state.lastStage !== targetStage) {
-      contextRef.current.clearScheduledEffects(treeData);
-      treeSystem.switchTreeStage(treeData, targetStage);
-      state.lastStage = targetStage;
-      state.nextEffectThreshold = Math.floor(nextGrowth) + 1;
+    if (!state.initialized) {
+      state.lastStage = getGrowthStage(nextGrowth);
+      state.nextEffectThreshold = Math.floor(Math.max(0, nextGrowth)) + 1;
       state.initialized = true;
     }
 
     if (nextGrowth < state.nextEffectThreshold - 1) {
-      state.nextEffectThreshold = Math.floor(nextGrowth) + 1;
+      state.nextEffectThreshold = Math.floor(
+        Math.max(0, nextGrowth)
+      ) + 1;
     }
   }, [growth]);
 

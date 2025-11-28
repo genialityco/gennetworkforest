@@ -53,10 +53,10 @@ export function UserTree3D({ grow }) {
         camera={{ position: [20, 8, 16], fov: 45 }}
         style={{
           position: "absolute",   // 🔑 CLAVE
-          top: grow == 100 ? "50%": "70%" ,
-          left: "35%",
-          width: "30%",
-          height: "20%",
+          top: grow == 100 ? "30%": "50%" ,
+          left: "28%",
+          width: "45%",
+          height: "40%",
           zIndex: 1               // atrás de la UI
         }}
       >

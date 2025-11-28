@@ -223,7 +223,7 @@ export function updateUserTreeGrowth(treeGroup, newGrowth) {
   // 3. Actualizar etiqueta de porcentaje
   treeGroup.remove(treeGroup.userData.growthLabel);
   const newLabel = createGrowthLabel(newG, treeGroup.userData.baseHeight);
-  treeGroup.add(newLabel);
+  //treeGroup.add(newLabel);
   treeGroup.userData.growthLabel = newLabel;
 
   // 4. Animación suave de escala

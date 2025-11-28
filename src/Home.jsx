@@ -539,7 +539,7 @@ export default function Home({ navigate }) {
 
         {/* Acciones */}
         <div style={{ marginTop: "1.5rem", marginBottom: "0.5rem" }}>
-          <Group justify="space-around" style={{ marginBottom: "1.5rem" }}>
+          <Group justify="space-between" style={{ marginBottom: "1.5rem" }}>
             {/* Regar */}
             <button
               onClick={handleWater}
